@@ -9,48 +9,69 @@ ICNS="$ROOT_DIR/Resources/AppIcon.icns"
 
 mkdir -p "$ROOT_DIR/Resources" "$ICONSET"
 
-# Inline SVG: a 1024×1024 rounded white tile with a 2x2 checker glyph centered
-# and a blue accent stripe at the bottom. No text — system-font lookup is
-# unreliable across ImageMagick installs.
+# 1024×1024 macOS 26-style app icon:
+#   - rounded squircle white tile with a subtle vertical gradient
+#   - inner card filled with a checkerboard pattern (= "background removed")
+#   - centred blue portrait silhouette (= the subject that survives)
+#   - thin scissor-cut accent stripe on the right edge of the subject
+# Everything vector. No text — ImageMagick's font lookup is fragile.
 SVG="$ROOT_DIR/build/appicon.svg"
 cat > "$SVG" <<'SVG'
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
-    <pattern id="c" width="96" height="96" patternUnits="userSpaceOnUse">
-      <rect width="48" height="48" fill="#dcdcdc"/>
-      <rect x="48" width="48" height="48" fill="#ffffff"/>
-      <rect y="48" width="48" height="48" fill="#ffffff"/>
-      <rect x="48" y="48" width="48" height="48" fill="#dcdcdc"/>
-    </pattern>
-    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#eef2f7"/>
+      <stop offset="1" stop-color="#e9eef6"/>
     </linearGradient>
+    <linearGradient id="subject" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3aa6ff"/>
+      <stop offset="1" stop-color="#005ec0"/>
+    </linearGradient>
+    <pattern id="checker" width="64" height="64" patternUnits="userSpaceOnUse">
+      <rect width="32" height="32" fill="#d4d9e2"/>
+      <rect x="32" width="32" height="32" fill="#ffffff"/>
+      <rect y="32" width="32" height="32" fill="#ffffff"/>
+      <rect x="32" y="32" width="32" height="32" fill="#d4d9e2"/>
+    </pattern>
+    <filter id="depth" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="14"/>
+      <feOffset dx="0" dy="14"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.22"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
   </defs>
-  <rect width="1024" height="1024" rx="224" fill="url(#g)"/>
-  <rect x="160" y="160" width="704" height="704" rx="96" fill="url(#c)"/>
-  <rect x="160" y="816" width="704" height="48" rx="24" fill="#007aff"/>
-  <circle cx="512" cy="512" r="180" fill="#007aff" opacity="0.92"/>
+
+  <!-- outer tile -->
+  <rect width="1024" height="1024" rx="224" fill="url(#tile)"/>
+
+  <!-- inner "no background" card -->
+  <rect x="144" y="144" width="736" height="736" rx="112" fill="url(#checker)"/>
+  <rect x="144" y="144" width="736" height="736" rx="112"
+        fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="2"/>
+
+  <!-- portrait silhouette (head + shoulders) on top of the checker -->
+  <g filter="url(#depth)">
+    <!-- head -->
+    <circle cx="512" cy="416" r="148" fill="url(#subject)"/>
+    <!-- shoulders / torso -->
+    <path d="M 252 880
+             L 252 760
+             Q 252 596 512 596
+             Q 772 596 772 760
+             L 772 880 Z"
+          fill="url(#subject)"/>
+  </g>
 </svg>
 SVG
 
-# Use ImageMagick (`magick`) which is in Homebrew. Falls back to `convert` on
-# ImageMagick 6 boxes. SVG → PNG; iconutil packs the result into an .icns.
-RENDER() {
-    local size="$1" out="$2"
-    if command -v magick >/dev/null; then
-        magick -background none -density 384 "$SVG" -resize "${size}x${size}" "$out"
-    elif command -v convert >/dev/null; then
-        convert -background none -density 384 "$SVG" -resize "${size}x${size}" "$out"
-    else
-        print "ERROR: install ImageMagick (brew install imagemagick)" >&2; exit 1
-    fi
-}
+# Render via the bundled Swift script — uses Core Graphics directly so we
+# don't depend on ImageMagick or RSVG (both fail on complex SVGs anyway).
+SCRIPT="$ROOT_DIR/scripts/draw-icon.swift"
 
 for size in 16 32 64 128 256 512 1024; do
     half=$((size / 2))
-    RENDER "$size" "$ICONSET/icon_${size}x${size}.png"
-    RENDER "$size" "$ICONSET/icon_${half}x${half}@2x.png"
+    swift "$SCRIPT" "$size" "$ICONSET/icon_${size}x${size}.png" >/dev/null
+    swift "$SCRIPT" "$size" "$ICONSET/icon_${half}x${half}@2x.png" >/dev/null
 done
 
 iconutil -c icns "$ICONSET" -o "$ICNS"

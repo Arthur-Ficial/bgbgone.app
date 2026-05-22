@@ -1,16 +1,25 @@
 # bgbgone.app
 
+<p align="center">
+  <img src="design/reference-screenshots/v0.1.1-app-icon.png" width="200" alt="bgbgone.app icon">
+</p>
+
 **Background, be gone!** — the macOS GUI for [`bgbgone`](https://github.com/Arthur-Ficial/bgbgone).
 
 Drop a folder of images. Watch it process. End up with a folder of clean cutouts. 100% on-device (Apple Vision), batchable, never touches the network.
 
 `bgbgone.app` is a thin wrapper around the `bgbgone` CLI — there is no image-processing logic in this repo. The GUI exists to make the same UNIX tool ergonomic for visual workflows: bulk product photography, headshot batches, content cleanup. For automation, scripting, and pipelines, use the CLI directly.
 
+![empty state](design/reference-screenshots/v0.1-empty-state.png)
+
 ## Install
 
 ```bash
-brew install Arthur-Ficial/tap/bgbgone-app
+brew tap Arthur-Ficial/tap
+brew install --cask bgbgone-app
 ```
+
+Or grab the signed + notarised `.zip` from the [latest release](https://github.com/Arthur-Ficial/bgbgone.app/releases/latest).
 
 The cask ships with `bgbgone` embedded as a fallback, so it works out of the box. If you already have `bgbgone` installed via `brew install Arthur-Ficial/tap/bgbgone`, the app uses your installed version (keeping the CLI and GUI in lockstep).
 

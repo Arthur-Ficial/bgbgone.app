@@ -39,7 +39,9 @@ struct BgBgOneRunner: BgBgOneRunning {
             process.environment = env
         }
 
-        logger.debug("spawn: \(binary.path, privacy: .public) \(arguments.joined(separator: " "), privacy: .public)")
+        let cmdLine = "\(binary.path) \(arguments.joined(separator: " "))"
+        logger.debug("spawn: \(cmdLine, privacy: .public)")
+        Task { @MainActor in DebugLog.shared.append(category: "spawn", message: cmdLine) }
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<RunResult, Error>) in
@@ -49,6 +51,10 @@ struct BgBgOneRunner: BgBgOneRunning {
                     let stderrTail = Self.tail(of: stderrData, lines: 8)
 
                     self.logger.debug("exit: \(proc.terminationStatus) stderr: \(stderrTail, privacy: .public)")
+                    let exitCode = proc.terminationStatus
+                    Task { @MainActor in
+                        DebugLog.shared.append(category: "exit", message: "code=\(exitCode) stderr=\(stderrTail)")
+                    }
 
                     switch proc.terminationStatus {
                     case 0:

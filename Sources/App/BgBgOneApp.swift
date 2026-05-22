@@ -20,6 +20,7 @@ struct ContentView: View {
     @Bindable var viewModel: AppViewModel
     @State private var isDropTargeted = false
     @State private var currentDragHint: DragHint = .empty
+    @State private var isDebugOpen: Bool = ProcessInfo.processInfo.arguments.contains("--debug")
 
     var body: some View {
         ZStack {
@@ -40,6 +41,22 @@ struct ContentView: View {
         )
         .shadow(color: .black.opacity(0.34), radius: 28, x: 0, y: 30)
         .padding(20)
+        .overlay(alignment: .bottomTrailing) {
+            if isDebugOpen {
+                DebugOverlay(viewModel: viewModel, log: DebugLog.shared) {
+                    isDebugOpen = false
+                }
+                .padding(16)
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+            }
+        }
+        .background {
+            // Background keyboard handler: cmd-` toggles the debug overlay.
+            Button("") { isDebugOpen.toggle() }
+                .keyboardShortcut("`", modifiers: .command)
+                .opacity(0)
+        }
+        .animation(.easeOut(duration: 0.16), value: isDebugOpen)
     }
 
     @ViewBuilder private var mainWindow: some View {

@@ -27,7 +27,10 @@ let package = Package(
                 "bgbgone-app",
                 .product(name: "Testing", package: "swift-testing"),
             ],
-            path: "Tests"
+            path: "Tests",
+            // Fixtures are accessed via `#filePath` (source-tree relative), not bundled.
+            // Excluding stops the SwiftPM "unhandled file" warning without copying.
+            exclude: ["fixtures"]
         ),
     ]
 )

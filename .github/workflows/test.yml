@@ -1,0 +1,42 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: swift test
+    runs-on: macos-26
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Swift version
+        run: swift --version
+
+      - name: Cache SwiftPM artefacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/.swiftpm
+          key: ${{ runner.os }}-swiftpm-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-swiftpm-
+
+      - name: Run tests
+        run: swift test --parallel
+
+      - name: NoBusinessLogic guard summary
+        # If this exits non-zero something imported Vision/CoreImage in Sources/.
+        # The architectural promise is broken — fail the build loudly.
+        run: |
+          if grep -RnE 'import (Vision|CoreImage|CoreML|Metal|Accelerate|MetalKit|VideoToolbox)' Sources/ ; then
+            echo "::error::Forbidden image-processing framework imported under Sources/"
+            exit 1
+          fi

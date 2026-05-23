@@ -1,0 +1,398 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>bgbgone-app — v0.3 mockup (after T1-T10)</title>
+<style>
+  :root{
+    --bg:#ececec; --pane:#fff; --line:#d9d9d9; --soft:#f5f5f5;
+    --txt:#1c1c1e; --muted:#7c7c80; --accent:#0a84ff; --danger:#ff453a;
+    --warn:#ff9f0a; --ok:#30d158;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#cbcbcb;font:13px/1.4 var(--sans);color:var(--txt)}
+  .desktop{padding:24px;min-height:100vh}
+  .win{
+    width:1180px;margin:0 auto;background:var(--bg);
+    border-radius:10px;overflow:hidden;
+    box-shadow:0 24px 60px rgba(0,0,0,.35),0 2px 6px rgba(0,0,0,.2);
+    border:1px solid #bdbdbd;
+  }
+  .tb{
+    display:flex;align-items:center;gap:10px;
+    padding:8px 14px;background:linear-gradient(#e9e9e9,#dcdcdc);
+    border-bottom:1px solid #bcbcbc;
+  }
+  .lights{display:flex;gap:6px;margin-right:8px}
+  .lights i{width:12px;height:12px;border-radius:50%;display:block;border:1px solid rgba(0,0,0,.15)}
+  .lights .c{background:#ff5f57} .lights .m{background:#febc2e} .lights .g{background:#28c840}
+  .title{flex:1;text-align:center;font-weight:600;font-size:12px;color:#555}
+  .tb .menus{font-size:11px;color:#666;display:flex;gap:14px;margin-right:14px}
+  .tb .menus span{cursor:default}
+  .tb .menus span.hot{color:#000}
+  .btn{
+    border:1px solid #b8b8b8;background:#fafafa;border-radius:6px;
+    padding:5px 10px;font:600 12px var(--sans);color:#222;cursor:default;
+  }
+  .btn.primary{background:linear-gradient(#3a93ff,#0a6efd);border-color:#0a6efd;color:#fff}
+  .btn.stop{background:linear-gradient(#ff6b62,#ff3b30);border-color:#d12d24;color:#fff}
+  .btn.sec{background:#f0f0f0}
+  .btn[disabled]{opacity:.4}
+  .body{display:grid;grid-template-columns:200px 1fr 360px;height:600px}
+  .side{background:#f6f6f6;border-right:1px solid var(--line);padding:8px 0;font-size:12px}
+  .side h4{margin:8px 12px 4px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .side a{display:flex;align-items:center;gap:6px;padding:5px 12px;color:#222;text-decoration:none}
+  .side a.on{background:#dfe6ef;color:#000}
+  .side a .ct{margin-left:auto;background:#d6d6d6;color:#444;padding:1px 7px;border-radius:9px;font-size:10px}
+  .side .chev{margin-left:6px;color:var(--accent);font-size:10px;opacity:0;}
+  .side a:hover .chev{opacity:1}
+  .list{display:flex;flex-direction:column;min-width:0;background:var(--pane);border-right:1px solid var(--line)}
+  .bigprev{
+    display:grid;grid-template-columns:1fr 1fr;gap:14px;
+    padding:14px;background:#f7f7f8;border-bottom:1px solid var(--line);
+    height:230px;
+  }
+  .bigprev .pane{
+    border-radius:8px;border:1px solid var(--line);background:#fff;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--muted);font-size:12px;position:relative;overflow:hidden;
+  }
+  .bigprev .pane.checker{
+    background:conic-gradient(#fff 0 25%,#e2e2e2 0 50%,#fff 0 75%,#e2e2e2 0) 0 0/22px 22px;
+  }
+  .bigprev .pane b{
+    position:absolute;top:8px;left:10px;font-size:10px;color:#222;
+    background:rgba(255,255,255,.9);padding:2px 8px;border-radius:4px;
+    font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+  }
+  .bigprev .pane .meta{
+    position:absolute;bottom:8px;left:10px;right:10px;font-size:10px;
+    color:#555;background:rgba(255,255,255,.85);padding:3px 8px;border-radius:4px;
+    font-family:var(--mono);display:flex;justify-content:space-between;
+  }
+  .bigprev .pane .stand{font-size:18px;color:#888;letter-spacing:.04em}
+  .listscroll{flex:1;overflow:auto}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{padding:5px 10px;border-bottom:1px solid #ededed;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  th{font-weight:600;color:#555;background:#fafafa;font-size:11px;position:sticky;top:0}
+  td.mono,th.mono{font-family:var(--mono);font-size:11px}
+  tr.sel td{background:#cfe1ff}
+  .pill{display:inline-flex;align-items:center;gap:5px;font-size:11px}
+  .pill .dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+  .pill.done .dot{background:var(--ok)} .pill.run .dot{background:var(--warn)}
+  .pill.err .dot{background:var(--danger)} .pill.q .dot{background:#aaa}
+  .pill.raw .dot{background:#dcdcdc;border:1px solid #bbb}
+  .src{color:#444}
+  .src.loose{color:var(--muted);font-style:italic}
+  td.link{color:var(--accent);cursor:pointer}
+  td.link:hover{text-decoration:underline}
+  td.pend{color:var(--muted);font-style:italic}
+  td.cellpair{display:flex;align-items:center;gap:8px;min-width:0}
+  td.cellpair span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+  .thumb{
+    display:inline-block;width:36px;height:24px;border-radius:3px;
+    border:1px solid var(--line);vertical-align:middle;
+    background:conic-gradient(#fff 0 25%,#e6e6e6 0 50%,#fff 0 75%,#e6e6e6 0) 0 0/8px 8px;
+    position:relative;overflow:hidden;
+  }
+  .thumb.orig{background:linear-gradient(135deg,#cdd6e0,#9aa5b3)}
+  .thumb.cut::after{
+    content:"";position:absolute;left:50%;top:50%;width:14px;height:18px;
+    transform:translate(-50%,-50%);background:#3a3a3a;
+    clip-path:polygon(50% 0,80% 30%,80% 70%,100% 100%,0 100%,20% 70%,20% 30%);
+  }
+  .thumb.empty{background:#f4f4f4 !important;border-style:dashed;color:#bbb;font-size:9px;text-align:center;line-height:22px}
+  .thumb.spin{background:#fafafa !important;color:var(--warn);font-size:14px;text-align:center;line-height:22px}
+  .thumb.err{background:#fdecea !important;border-color:#f5b5b0;color:var(--danger);text-align:center;font-size:13px;line-height:22px}
+  .rerun{display:inline-block;font-size:10px;color:var(--accent);border:1px solid var(--accent);padding:0 5px;border-radius:8px;margin-left:8px;font-weight:600}
+  .insp{background:#fafafa;display:flex;flex-direction:column;min-width:0}
+  .insp .sec{border-bottom:1px solid var(--line);padding:12px 14px}
+  .insp .sec h5{margin:0 0 8px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .dual{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .dual .pane{height:120px;border-radius:6px;border:1px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted);position:relative}
+  .dual .pane.checker{
+    background:
+      conic-gradient(#fff 0 25%,#e6e6e6 0 50%,#fff 0 75%,#e6e6e6 0) 0 0/14px 14px;
+  }
+  .dual .pane b{position:absolute;top:5px;left:8px;font-size:9px;color:#333;background:rgba(255,255,255,.85);padding:1px 5px;border-radius:3px;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+  .row{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;gap:8px}
+  .row .k{color:var(--muted)}
+  .row .v{font-family:var(--mono);font-size:11px;color:#222;text-align:right;overflow:hidden;text-overflow:ellipsis}
+  .form .frow{display:grid;grid-template-columns:90px 1fr;align-items:center;gap:10px;margin-bottom:8px;font-size:12px}
+  .form .frow label{color:var(--muted);text-align:right}
+  .form input,.form select,.form .seg{width:100%;padding:3px 6px;font-size:12px;border:1px solid var(--line);border-radius:5px;background:#fff}
+  .seg{display:flex;padding:0;overflow:hidden}
+  .seg span{flex:1;text-align:center;padding:4px 0;border-right:1px solid var(--line);cursor:default;font-size:11px;background:#fff}
+  .seg span:last-child{border-right:0}
+  .seg span.on{background:#0a84ff;color:#fff}
+  .seg.sm span{font-size:10px;padding:3px 0}
+  .form select{width:100%;padding:3px 6px;font-size:12px;border:1px solid var(--line);border-radius:5px;background:#fff}
+  .rng{display:flex;align-items:center;gap:8px}
+  .rng input[type=range]{flex:1;min-width:0}
+  .rngv{font-family:var(--mono);font-size:10px;color:#555;min-width:80px;text-align:right}
+  .check{margin:3px 0 3px 100px;font-size:12px;color:#444}
+  .check label{display:flex;align-items:center;gap:6px;cursor:default}
+  .adv{margin-top:10px;padding-top:8px;border-top:1px dashed #d4d4d4}
+  .advhead{font-size:11px;color:var(--muted);margin-bottom:6px;cursor:default}
+  .advhead small{color:#aaa}
+  .hist{max-height:120px;overflow:auto}
+  .hist .h{font-size:11px;padding:6px 0;border-top:1px dashed #e3e3e3}
+  .hist .h:first-child{border-top:0}
+  .hist .when{font-weight:600;color:#222}
+  .hist .cfg{color:#444}
+  .hist .out{font-family:var(--mono);font-size:10px;color:var(--accent);word-break:break-all}
+  .hist .out.gone{color:#999;text-decoration:line-through}
+  .status{
+    display:flex;align-items:center;gap:10px;height:28px;
+    padding:0 12px;background:linear-gradient(#ededed,#e0e0e0);
+    border-top:1px solid #bcbcbc;font-size:11px;color:#333;
+  }
+  .status .grow{flex:1;text-align:center;color:#555;font-family:var(--mono)}
+  .status .iconbtn{
+    border:0;background:transparent;color:#222;font-size:11px;font-weight:500;
+    padding:3px 8px;border-radius:5px;cursor:default;
+  }
+  .status .iconbtn:hover{background:#d4d4d4}
+  .status .iconbtn[disabled]{opacity:.4}
+  .ctx{
+    position:absolute;top:200px;left:430px;width:280px;background:#fafafa;
+    border:1px solid #b0b0b0;border-radius:7px;
+    box-shadow:0 12px 30px rgba(0,0,0,.25);
+    padding:5px 0;font-size:12px;z-index:9;
+  }
+  .ctx .item{padding:4px 14px;display:flex;justify-content:space-between;gap:14px}
+  .ctx .item.dis{color:#aaa}
+  .ctx .item.dest{color:var(--danger)}
+  .ctx .item:hover:not(.dis){background:#0a84ff;color:#fff}
+  .ctx .item:hover:not(.dis) .kbd{color:#fff;opacity:.85}
+  .ctx .kbd{font:11px var(--mono);color:#888}
+  .ctx hr{border:0;border-top:1px solid #e3e3e3;margin:4px 8px}
+  .legend{max-width:1180px;margin:16px auto 0;font-size:11px;color:#444;font-family:var(--mono);background:#1e1e1e;color:#eee;padding:12px 16px;border-radius:8px;line-height:1.6}
+  .legend b{color:#7dd3fc}
+  .legend mark{background:#3a3a00;color:#facc15;padding:0 4px;border-radius:3px}
+</style>
+
+<div class="desktop">
+  <div class="win">
+
+    <!-- TRAFFIC LIGHTS + MENU BAR PROXY -->
+    <div class="tb">
+      <div class="lights"><i class="c"></i><i class="m"></i><i class="g"></i></div>
+      <div class="menus">
+        <span>File</span>
+        <span class="hot">Edit ▾ <small style="color:#999">(Undo Process 4 images ⌘Z · Redo Process 4 images ⌘⇧Z · T8)</small></span>
+        <span>View</span>
+      </div>
+      <button class="btn sec">+ Add files…</button>
+      <button class="btn stop" title="T7: state-derived label">Stop — 3 of 4 done</button>
+      <button class="btn sec">Process selected (1)</button>
+      <div class="title">bgbgone</div>
+      <button class="btn sec">Inspector</button>
+    </div>
+
+    <!-- MAIN BODY -->
+    <div class="body">
+
+      <!-- SIDEBAR -->
+      <div class="side">
+        <h4>Library</h4>
+        <a class="on">▸ All Files <span class="ct">4</span></a>
+        <h4>Sources</h4>
+        <a>📁 summer-shoot <span class="chev">▸ filter</span><span class="ct">3</span></a>
+        <a>📄 Single Files <span class="chev">▸ filter</span><span class="ct">2</span></a>
+      </div>
+
+      <!-- FILE LIST -->
+      <div class="list">
+
+        <!-- BIG DUAL PREVIEW — pure images, only ORIGINAL/CUTOUT corner labels (T12) -->
+        <div class="bigprev">
+          <div class="pane"><b>Original</b></div>
+          <div class="pane checker"><b>Cutout</b></div>
+        </div>
+
+        <div class="listscroll">
+        <table>
+          <thead>
+            <tr>
+              <th title="thumb + filename — double-click opens in Preview">Original</th>
+              <th title="thumb + filename — single-click opens in Preview">Cutout</th>
+              <th title="T1: origin of each row">Source ▼</th>
+              <th>Status</th>
+              <th class="mono">Size</th>
+              <th class="mono">Dimensions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="cellpair"><span class="thumb orig"></span><span>11th_century_bronze_…_Art.jpg</span></td>
+              <td class="cellpair link"><span class="thumb cut"></span><span>11th_century_bronze_…_Art_bgbgone.png</span></td>
+              <td class="src">summer-shoot</td>
+              <td><span class="pill done"><span class="dot"></span>Done · 992 ms</span></td>
+              <td class="mono">3.9 MB</td>
+              <td class="mono">4444 × 5196</td>
+            </tr>
+            <tr class="sel">
+              <td class="cellpair"><span class="thumb orig"></span><span>2016_Falcon_face_Base.jpg</span></td>
+              <td class="cellpair link"><span class="thumb cut"></span><span>2016_Falcon_face_Base_bgbgone.png</span></td>
+              <td class="src">summer-shoot</td>
+              <td><span class="pill done"><span class="dot"></span>Done · 503 ms</span></td>
+              <td class="mono">2.0 MB</td>
+              <td class="mono">3000 × 4500</td>
+            </tr>
+            <tr>
+              <td class="cellpair"><span class="thumb orig"></span><span>2019-11-16_Heidelberg_Braun.jpg</span></td>
+              <td class="cellpair pend"><span class="thumb err">!</span><span>— error</span></td>
+              <td class="src">summer-shoot</td>
+              <td><span class="pill err"><span class="dot"></span>Error · no subject<span class="rerun">Re-run</span></span></td>
+              <td class="mono">38.7 MB</td>
+              <td class="mono">5576 × 4117</td>
+            </tr>
+            <tr>
+              <td class="cellpair"><span class="thumb orig"></span><span>2023_06.jpg</span></td>
+              <td class="cellpair pend"><span class="thumb spin">◐</span><span>2023_06_bgbgone.png</span></td>
+              <td class="src">Single Files</td>
+              <td><span class="pill run"><span class="dot"></span>Processing…</span></td>
+              <td class="mono">21.0 MB</td>
+              <td class="mono">6240 × 4160</td>
+            </tr>
+            <tr>
+              <td class="cellpair"><span class="thumb orig"></span><span>extra_4.jpg</span></td>
+              <td class="cellpair pend"><span class="thumb empty">—</span><span>extra_4_bgbgone.png</span></td>
+              <td class="src">Single Files</td>
+              <td><span class="pill raw"><span class="dot"></span>Not run yet</span></td>
+              <td class="mono">1.4 MB</td>
+              <td class="mono">2400 × 1600</td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+
+        <!-- CONTEXT MENU — trimmed to 5 essentials. Open/QuickLook/Copy live on direct gestures. -->
+        <div class="ctx">
+          <div class="item">Reveal Original in Finder<span class="kbd">⌘R</span></div>
+          <div class="item">Reveal Cutout in Finder</div>
+          <hr>
+          <div class="item">Process this one<span class="kbd">⌘⏎</span></div>
+          <div class="item">Re-run with current settings</div>
+          <hr>
+          <div class="item dest">Remove from Queue<span class="kbd">⌫</span></div>
+        </div>
+      </div>
+
+      <!-- INSPECTOR -->
+      <div class="insp">
+
+        <!-- CONFIG -->
+        <div class="sec form">
+          <h5>Settings <small style="color:#9aa;font-weight:400;text-transform:none;letter-spacing:0">— unchanged = bgbgone default</small></h5>
+          <div class="frow"><label>Save to</label><input value="~/Pictures/cutouts"></div>
+          <div class="frow"><label>Name as</label><input value="{name}_bgbgone"></div>
+          <div class="frow"><label>Background</label>
+            <div class="seg"><span class="on">Transparent</span><span>Color</span><span>Image</span></div>
+          </div>
+          <div class="frow"><label>Format</label>
+            <div class="seg"><span class="on">PNG</span><span>JPEG</span><span>HEIC</span><span>AVIF</span><span>TIFF</span></div>
+          </div>
+          <div class="frow"><label>Subject</label>
+            <select><option>Auto</option><option>Person</option><option>Product</option><option>Animal</option><option>Car</option><option>Graphic</option><option>Transport</option></select>
+          </div>
+
+          <div class="adv">
+            <div class="advhead">▸ Edge &amp; matte  <small>--feather --threshold --padding --crop-margin --semitransparency</small></div>
+            <div class="frow"><label>Edge feather</label>
+              <div class="rng"><input type="range" min="0" max="10" value="1"><span class="rngv">1 px</span></div>
+            </div>
+            <div class="frow"><label>Mask threshold</label>
+              <div class="rng"><input type="range" min="0" max="100" value="50"><span class="rngv">0.50</span></div>
+            </div>
+            <div class="frow"><label>Padding</label>
+              <div class="rng"><input type="range" min="0" max="100" value="0"><span class="rngv">0 px</span></div>
+            </div>
+            <div class="frow"><label>Crop margin</label>
+              <div class="rng"><input type="range" min="0" max="100" value="0"><span class="rngv">0 px</span></div>
+            </div>
+            <div class="check"><label><input type="checkbox"> Tight crop to subject  <small style="color:#9aa">(--crop)</small></label></div>
+            <div class="check"><label><input type="checkbox" checked> Keep semi-transparent matte pixels  <small style="color:#9aa">(--semitransparency)</small></label></div>
+
+            <div class="advhead" style="margin-top:14px">▸ Canvas &amp; placement  <small>--scale --position --roi</small></div>
+            <div class="frow"><label>Subject scale</label>
+              <div class="rng"><input type="range" min="10" max="100" value="100"><span class="rngv">100 %</span></div>
+            </div>
+            <div class="frow"><label>Position</label>
+              <select><option>Original</option><option>Center</option><option>Top-left</option><option>Top-right</option><option>Bottom-left</option><option>Bottom-right</option><option>Custom %…</option></select>
+            </div>
+            <div class="frow"><label>Region of interest</label>
+              <input placeholder='x1 y1 x2 y2 (px or %) — empty = whole image'>
+            </div>
+
+            <div class="advhead" style="margin-top:14px">▸ Shadow  <small>--shadow --shadow-type --shadow-opacity</small></div>
+            <div class="check"><label><input type="checkbox"> Drop shadow under cutout</label></div>
+            <div class="frow"><label>Shadow type</label>
+              <select disabled><option>Auto</option><option>Drop</option><option>3D</option><option>Car</option><option>None</option></select>
+            </div>
+            <div class="frow"><label>Shadow opacity</label>
+              <div class="rng"><input type="range" min="0" max="100" value="50" disabled><span class="rngv" style="color:#bbb">auto</span></div>
+            </div>
+
+            <div class="advhead" style="margin-top:14px">▸ Output channels &amp; size  <small>--mask-only --channels --size --quality</small></div>
+            <div class="check"><label><input type="checkbox"> Output alpha mask only  <small style="color:#9aa">(--mask-only)</small></label></div>
+            <div class="frow"><label>Channels</label>
+              <div class="seg sm"><span class="on">RGBA</span><span>Alpha</span></div>
+            </div>
+            <div class="frow"><label>Output size cap</label>
+              <div class="seg sm"><span class="on">Auto</span><span>Preview</span><span>50 MP</span><span>Full</span></div>
+            </div>
+            <div class="frow"><label>Quality</label>
+              <div class="rng"><input type="range" min="1" max="100" value="92" disabled><span class="rngv" style="color:#bbb">92 (PNG: lossless)</span></div>
+            </div>
+
+            <div class="advhead" style="margin-top:14px">▸ Algorithm &amp; multi  <small>--algo --multi --instance-naming</small></div>
+            <div class="frow"><label>Algorithm</label>
+              <select><option>Auto</option><option>Vision mask</option><option>Person</option><option>Saliency</option></select>
+            </div>
+            <div class="check"><label><input type="checkbox"> One file per detected instance  <small style="color:#9aa">(--multi)</small></label></div>
+            <div class="frow"><label>Instance naming</label>
+              <input value="{base}-{n}.{ext}" disabled style="color:#bbb">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATUS BAR (T4) — silent. Counts live on the running button; path lives in the Cutout column. -->
+    <div class="status">
+      <button class="iconbtn" title="T4: opens summer-shoot folder">📁 Source Folder</button>
+      <button class="iconbtn" title="T4: opens ~/Pictures/cutouts">📂 Output Folder</button>
+      <div class="grow"></div>
+    </div>
+  </div>
+
+  <!-- LEGEND -->
+  <div class="legend">
+<b># bgbgone-app v0.3 — what changed vs v0.2.0</b>
+
+<mark>T1</mark>  Source Folder column between Name and Status (sortable, tooltip = full path; loose files: em-dash)
+<mark>T2</mark>  Right-click menu grew from 2 to 11 entries — reveal/open/copy for BOTH original and cutout
+<mark>T3</mark>  Spacebar opens the real <b>QLPreviewPanel</b>; Return calls <b>NSWorkspace.shared.open()</b> (user's default app)
+<mark>T4</mark>  Status bar gained two real buttons: <b>Open Source Folder</b> / <b>Open Output Folder</b>
+<mark>T5</mark>  Toolbar shows <b>Process selected (N)</b> when ≥1 row is selected; per-row <b>Re-run</b> badge on .error
+<mark>T6</mark>  Context menu <b>Re-run with current settings</b> (trashes old cutout, reprocesses .done files)
+<mark>T7</mark>  Primary button label is state-derived: <b>Stop — N of M done</b> while running
+<mark>T8</mark>  Edit menu has real <b>Undo Process N images</b> / <b>Redo</b> via Foundation.UndoManager — Cmd-Z works
+<mark>T9</mark>  Delete removes from queue · Cmd-A selects all · multi-select context menu with concrete N counts
+<mark>T10</mark> Per-item run history persisted to disk — <b>not shown in UI</b> (DRY), purely the backbone for Undo (T8)
+<mark>T11</mark> Four side-by-side cols, left-to-right: <b>In thumb · Original filename · Out thumb · Cutout filename</b>
+       Double-click original (thumb or filename) → <b>NSWorkspace.shared.open(originalURL)</b> opens in Preview
+       Single-click cutout (thumb or filename) → <b>NSWorkspace.shared.open(cutoutURL)</b> opens in Preview
+       Cutout filename shown even for unprocessed rows (preview) so user sees what it WILL be called
+<mark>T12</mark> Big dual preview moved to TOP THIRD of middle column (~230 px) — much larger device previews
+       Inspector right pane holds <b>Settings only</b> (DRY — no duplicate meta, no history UI)
+<mark>T13</mark> Virtual <b>Single Files</b> source in sidebar — every loose drop has a home, no italic em-dashes
+<mark>T14</mark> Full settings panel matching every bgbgone CLI flag — 5 essentials always visible,
+       advanced grouped in 5 disclosures (Edge·Canvas·Shadow·Output·Algorithm/multi).
+       <b>Unchanged controls emit NO CLI flag</b> — silent defaults are bgbgone's defaults.
+
+<b>Hard rule:</b> every dialog/panel above is a stock Apple API call. We render real state. No painted chrome.
+  </div>
+</div>

@@ -158,7 +158,7 @@ _[tool: done]_
 
 _[tool: fork_verifier_agent]_
 
-Built **bgbgone.app** — a Finder-style GUI for your background-removal CLI.
+Built **bgbgone-app** — a Finder-style GUI for your background-removal CLI.
 
 **What's in it:**
 - **Sidebar** — Library (Inbox/Recents/Cutouts/Queue/Errors), Locations, Recipes, Tags, + on-device/network status footer

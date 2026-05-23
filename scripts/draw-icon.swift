@@ -1,5 +1,5 @@
 #!/usr/bin/env swift
-// draw-icon.swift — render the bgbgone.app icon at a chosen pixel size.
+// draw-icon.swift — render the bgbgone-app icon at a chosen pixel size.
 // Usage: swift draw-icon.swift <size> <output.png>
 //
 // Uses Core Graphics + AppKit only (ships with macOS). Mirrors the design

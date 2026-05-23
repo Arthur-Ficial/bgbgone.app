@@ -1,6 +1,6 @@
-# bgbgone.app — project instructions
+# bgbgone-app — project instructions
 
-> **`bgbgone.app` is to `bgbgone` what `apfel-chat` is to `apfel`.** All scaffolding, scripts, and conventions from [apfel-chat](https://github.com/Arthur-Ficial/apfel-chat) apply here unless explicitly overridden.
+> **`bgbgone-app` is to `bgbgone` what `apfel-chat` is to `apfel`.** All scaffolding, scripts, and conventions from [apfel-chat](https://github.com/Arthur-Ficial/apfel-chat) apply here unless explicitly overridden.
 
 ## Golden Goal
 

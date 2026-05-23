@@ -53,8 +53,8 @@ sign_bundle() {
 }
 
 print "==> Building ${APP_NAME} ${VERSION}"
-swift build -c release --package-path "$ROOT_DIR"
-BIN_DIR="$(swift build -c release --show-bin-path --package-path "$ROOT_DIR")"
+swift build -c release --package-path "$ROOT_DIR" --scratch-path "$ROOT_DIR/build"
+BIN_DIR="$(swift build -c release --show-bin-path --package-path "$ROOT_DIR" --scratch-path "$ROOT_DIR/build")"
 BIN_PATH="${BIN_DIR}/${APP_NAME}"
 
 rm -rf "$APP_BUNDLE"

@@ -22,4 +22,4 @@ The design medium is **HTML/CSS/JS** — these are prototypes, not production co
 
 - `bgbgone-app/README.md` — this file
 - `bgbgone-app/chats/` — conversation transcripts (read these!)
-- `bgbgone-app/project/` — the `bgbgone.app` project files (HTML prototypes, assets, components)
+- `bgbgone-app/project/` — the `bgbgone-app` project files (HTML prototypes, assets, components)

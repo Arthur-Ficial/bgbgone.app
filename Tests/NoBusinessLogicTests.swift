@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// The hardest rule in the repo: bgbgone.app must never re-implement image-processing.
+/// The hardest rule in the repo: bgbgone-app must never re-implement image-processing.
 /// All segmentation/matting/compositing belongs to the spawned `bgbgone` CLI binary.
 ///
 /// This test scans `Sources/` for forbidden framework imports. If it ever passes a
@@ -47,7 +47,7 @@ struct NoBusinessLogicTests {
         }
 
         #expect(offenses.isEmpty,
-                "Forbidden imports found — bgbgone.app must not do image processing in-process:\n\(offenses.joined(separator: "\n"))")
+                "Forbidden imports found — bgbgone-app must not do image processing in-process:\n\(offenses.joined(separator: "\n"))")
     }
 
     /// Resolve the repo root from the test bundle's location.

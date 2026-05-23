@@ -17,7 +17,7 @@ struct MissingBinaryView: View {
                 .font(DesignFont.displayName)
                 .foregroundStyle(DesignColor.fg)
 
-            Text("bgbgone.app is a thin wrapper around the bgbgone CLI. Install it via Homebrew:")
+            Text("bgbgone-app is a thin wrapper around the bgbgone CLI. Install it via Homebrew:")
                 .font(.system(size: 13))
                 .foregroundStyle(DesignColor.fgMute)
                 .multilineTextAlignment(.center)

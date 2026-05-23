@@ -3,7 +3,7 @@ import ImageIO
 
 /// ImageIO-based metadata reader. Reads **only** dimensions + file size; never decodes
 /// pixels and never imports `CoreImage` / `Vision`. This is the only image-related
-/// framework allowed in `bgbgone.app` (and it's metadata-only).
+/// framework allowed in `bgbgone-app` (and it's metadata-only).
 ///
 /// Used by `AppViewModel` to populate the file list dims column. Pixel work happens
 /// inside the spawned `bgbgone` process.

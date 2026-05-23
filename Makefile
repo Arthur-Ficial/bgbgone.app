@@ -2,14 +2,15 @@ APP_NAME    = bgbgone-app
 APP_BUNDLE  = build/$(APP_NAME).app
 APP_DIR    ?= /Applications
 BIN_DIR    ?= $(HOME)/.local/bin
+SCRATCH    = --scratch-path build
 
 .PHONY: build test app run dist install install-app install-cli release clean
 
 build:
-	swift build -c release
+	swift build -c release $(SCRATCH)
 
 test:
-	swift test
+	swift test $(SCRATCH)
 
 app:
 	./scripts/build-app.sh

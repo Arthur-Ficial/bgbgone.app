@@ -1,5 +1,5 @@
 #!/bin/zsh
-# release.sh — full release pipeline for bgbgone.app.
+# release.sh — full release pipeline for bgbgone-app.
 # Tests → build → sign → notarise → zip → gh release → update Homebrew tap.
 #
 # Modes:
@@ -123,4 +123,4 @@ else
         -f content="$CASK_B64" --jq '.commit.sha' > /dev/null
 fi
 
-print "==> Done. https://github.com/Arthur-Ficial/bgbgone.app/releases/tag/$TAG"
+print "==> Done. https://github.com/Arthur-Ficial/bgbgone-app/releases/tag/$TAG"

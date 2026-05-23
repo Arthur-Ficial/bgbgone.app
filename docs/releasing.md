@@ -1,4 +1,4 @@
-# Releasing bgbgone.app
+# Releasing bgbgone-app
 
 `make release` is the one-shot command. It runs the full gate:
 
@@ -31,7 +31,7 @@ xcrun notarytool store-credentials notarytool \
     --team-id 7D2YX5DQ6M
 # (paste the app-specific password from appleid.apple.com when prompted)
 
-# 3. Set `gh` is authed for both Arthur-Ficial/bgbgone.app and Arthur-Ficial/homebrew-tap
+# 3. Set `gh` is authed for both Arthur-Ficial/bgbgone-app and Arthur-Ficial/homebrew-tap
 gh auth status
 ```
 
@@ -59,7 +59,7 @@ make release                # the real thing
 
 After `make release` succeeds:
 
-- `https://github.com/Arthur-Ficial/bgbgone.app/releases/tag/v0.1.0` is live.
+- `https://github.com/Arthur-Ficial/bgbgone-app/releases/tag/v0.1.0` is live.
 - `brew install Arthur-Ficial/tap/bgbgone-app` works on any Mac with the tap added.
 - The Homebrew cask is committed at `Arthur-Ficial/homebrew-tap/Casks/bgbgone-app.rb`.
 

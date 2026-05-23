@@ -33,7 +33,7 @@ struct MissingBinaryView: View {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString("brew install Arthur-Ficial/tap/bgbgone", forType: .string)
                 }
-                .buttonStyle(GhostButtonStyle())
+                .buttonStyle(.bordered)
             }
 
             Text("Or build from source — see github.com/Arthur-Ficial/bgbgone")
@@ -41,7 +41,7 @@ struct MissingBinaryView: View {
                 .foregroundStyle(DesignColor.fgFaint)
 
             Button("Retry", action: onRetry)
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(.borderedProminent)
                 .padding(.top, 8)
 
             if !searched.isEmpty {

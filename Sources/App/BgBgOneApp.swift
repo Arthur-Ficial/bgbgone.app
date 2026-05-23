@@ -9,10 +9,8 @@ struct BgBgOneApp: App {
         WindowGroup("bgbgone") {
             ContentView(viewModel: viewModel)
                 .frame(minWidth: 1080, idealWidth: 1080, minHeight: 760, idealHeight: 760)
-                .background(DesignColor.outerGradient.ignoresSafeArea())
         }
         .windowResizability(.contentMinSize)
-        .windowStyle(.hiddenTitleBar)
     }
 }
 
@@ -23,24 +21,17 @@ struct ContentView: View {
     @State private var isDebugOpen: Bool = ProcessInfo.processInfo.arguments.contains("--debug")
 
     var body: some View {
-        ZStack {
+        Group {
             switch viewModel.bootState {
             case .starting:
                 ProgressView().controlSize(.small)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .missingBinary(let searched):
                 MissingBinaryView(searched: searched, onRetry: { /* reload via app restart for v0.1 */ })
             case .ready:
                 mainWindow
             }
         }
-        .background(DesignColor.bg)
-        .clipShape(RoundedRectangle(cornerRadius: DesignRadius.window))
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignRadius.window)
-                .strokeBorder(DesignColor.border)
-        )
-        .shadow(color: .black.opacity(0.34), radius: 28, x: 0, y: 30)
-        .padding(20)
         .overlay(alignment: .bottomTrailing) {
             if isDebugOpen {
                 DebugOverlay(viewModel: viewModel, log: DebugLog.shared) {
@@ -51,7 +42,6 @@ struct ContentView: View {
             }
         }
         .background {
-            // Background keyboard handler: cmd-` toggles the debug overlay.
             Button("") { isDebugOpen.toggle() }
                 .keyboardShortcut("`", modifiers: .command)
                 .opacity(0)
@@ -61,13 +51,6 @@ struct ContentView: View {
 
     @ViewBuilder private var mainWindow: some View {
         VStack(spacing: 0) {
-            WindowChrome(
-                pendingCount: viewModel.pendingCount,
-                canProcess: viewModel.pendingCount > 0,
-                onAddFiles: addFiles,
-                onProcessAll: { Task { await viewModel.processAll() } }
-            )
-
             DualPreview(
                 selected: viewModel.files.first(where: { $0.id == viewModel.selectedId }),
                 isEmpty: viewModel.files.isEmpty,
@@ -107,9 +90,24 @@ struct ContentView: View {
             }
         }
         .animation(.easeOut(duration: 0.16), value: phaseIndex)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: { Task { await viewModel.processAll() } }) {
+                    if viewModel.pendingCount > 0 {
+                        Text("Remove background from \(viewModel.pendingCount)")
+                    } else {
+                        Text("All done")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(viewModel.pendingCount == 0)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button("Add files…", action: addFiles)
+            }
+        }
     }
 
-    /// Pluck a stable index off the drop phase so SwiftUI animates on transitions.
     private var phaseIndex: Int {
         switch viewModel.dropMachine.phase {
         case .idle: 0
@@ -139,5 +137,4 @@ struct ContentView: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { await viewModel.handleDrop(urls: [url]) }
     }
-
 }

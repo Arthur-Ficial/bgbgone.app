@@ -23,14 +23,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            .build
+            build
             ~/.swiftpm
-          key: ${{ runner.os }}-swiftpm-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          # Include github.repository_id so a repo rename invalidates the cache
+          # (PCMs bake absolute paths from /runner/work/<repo>/<repo>/, which
+          # break on rename and produce "missing required module 'SwiftShims'").
+          key: ${{ runner.os }}-swiftpm-${{ github.repository_id }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
           restore-keys: |
-            ${{ runner.os }}-swiftpm-
+            ${{ runner.os }}-swiftpm-${{ github.repository_id }}-
 
       - name: Run tests
-        run: swift test --parallel
+        run: swift test --parallel --scratch-path build
 
       - name: NoBusinessLogic guard summary
         # If this exits non-zero something imported Vision/CoreImage in Sources/.

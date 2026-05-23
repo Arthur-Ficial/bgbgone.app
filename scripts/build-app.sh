@@ -69,6 +69,17 @@ cp "$ROOT_DIR/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 
 [[ -f "$ICON_SOURCE" ]] && cp "$ICON_SOURCE" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 
+# Bundle Demo Mode assets — the fetch script + manifest live next to the helper.
+DEMO_SRC="$ROOT_DIR/scripts"
+DEMO_DEST="$APP_BUNDLE/Contents/Resources/scripts"
+if [[ -f "$DEMO_SRC/demo-manifest.json" && -f "$DEMO_SRC/fetch-demo-images.sh" ]]; then
+    print "==> Bundling Demo Mode assets (manifest + fetch script)"
+    mkdir -p "$DEMO_DEST"
+    cp "$DEMO_SRC/demo-manifest.json" "$DEMO_DEST/demo-manifest.json"
+    cp "$DEMO_SRC/fetch-demo-images.sh" "$DEMO_DEST/fetch-demo-images.sh"
+    chmod +x "$DEMO_DEST/fetch-demo-images.sh"
+fi
+
 if HELPER_PATH="$(resolve_helper 2>/dev/null)"; then
     print "==> Embedding bgbgone helper from ${HELPER_PATH}"
     cp "$HELPER_PATH" "$APP_BUNDLE/Contents/Helpers/bgbgone"

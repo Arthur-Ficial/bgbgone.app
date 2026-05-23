@@ -23,9 +23,23 @@ final class AppViewModel {
     var selectedId: ImageFile.ID?
     var config: Config = Config(outDirectory: Config.defaultOutDirectory)
 
+    /// Finder-style sidebar selection. `.all` shows every file; `.batch(id)` filters.
+    var sidebarSelection: SidebarItem? = .all
+
+    /// Files filtered by the current sidebar selection.
+    var visibleFiles: [ImageFile] {
+        switch sidebarSelection {
+        case .none, .some(.all): files
+        case .some(.batch(let id)): files.filter { $0.batchId == id }
+        }
+    }
+
     let dropMachine: DropMachine
 
-    private let runner: any BgBgOneRunning
+    /// `nil` when the binary couldn't be located. The UI shows `MissingBinaryView` and
+    /// disables actions in that case; `processAll()` early-returns. We do not ship a
+    /// stub runner — a stub is the "fake fallback" the no-fake-UI charter forbids.
+    private let runner: (any BgBgOneRunning)?
     private let scanner: any FolderScanning
     private let metaReader: any ImageMetaReading
     private let logger = Logger(subsystem: BuildInfo.osLogSubsystem, category: "app")
@@ -37,19 +51,17 @@ final class AppViewModel {
     convenience init() {
         let locator = BinaryLocator()
         let bootState: BootState
-        let runner: any BgBgOneRunning
+        let runner: (any BgBgOneRunning)?
         do {
             let binary = try locator.locate()
             bootState = .ready(binary: binary)
             runner = BgBgOneRunner(binary: binary)
         } catch BinaryLocator.LocatorError.notFound(let searched) {
             bootState = .missingBinary(searched: searched)
-            // Provide a stub runner so the rest of the type compiles; nothing should
-            // ever call it while bootState != .ready.
-            runner = StubMissingRunner()
+            runner = nil
         } catch {
             bootState = .missingBinary(searched: ["unknown: \(error)"])
-            runner = StubMissingRunner()
+            runner = nil
         }
         self.init(
             runner: runner,
@@ -62,7 +74,7 @@ final class AppViewModel {
     /// Test-friendly initialiser. Tests pass mocks for all three services so the
     /// integration test runs without spawning anything or touching disk.
     init(
-        runner: any BgBgOneRunning,
+        runner: (any BgBgOneRunning)?,
         scanner: any FolderScanning,
         metaReader: any ImageMetaReading,
         bootState: BootState
@@ -79,6 +91,82 @@ final class AppViewModel {
     func handleDragEnter(hint: DragHint) { dropMachine.handleDragEnter(hint: hint) }
     func handleDragLeave() { dropMachine.handleDragLeave() }
     func dismissSummary() { dropMachine.dismissSummary() }
+
+    // MARK: - Demo Mode
+
+    /// Demo download state — drives an attribution sheet + progress UI.
+    var demoState: DemoState = .idle
+
+    enum DemoState: Equatable {
+        case idle
+        case fetching
+        case failed(message: String)
+    }
+
+    /// Downloads the 10 public-domain demo images (manifest at scripts/demo-manifest.json),
+    /// then ingests the cache dir exactly like a user-dropped folder. Real script, real
+    /// curl, real attribution; no fake/sample files baked into the bundle.
+    func startDemo(scriptURL: URL, manifestURL: URL) async {
+        demoState = .fetching
+        defer {
+            if case .fetching = demoState { demoState = .idle }
+        }
+
+        do {
+            let cacheDir = try await runFetchScript(scriptURL: scriptURL, manifestURL: manifestURL)
+            await handleDrop(urls: [cacheDir])
+            demoState = .idle
+        } catch {
+            demoState = .failed(message: "\(error)")
+            logger.error("demo fetch failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    private func runFetchScript(scriptURL: URL, manifestURL: URL) async throws -> URL {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/bash")
+            process.arguments = [scriptURL.path]
+            let stdout = Pipe()
+            process.standardOutput = stdout
+            process.standardError = Pipe()
+            process.terminationHandler = { proc in
+                let data = (try? stdout.fileHandleForReading.readToEnd()) ?? Data()
+                guard proc.terminationStatus == 0 else {
+                    continuation.resume(throwing: DemoError.fetchExitNonZero(code: Int(proc.terminationStatus)))
+                    return
+                }
+                // The script prints the cache dir as its last stdout line.
+                let lines = (String(data: data, encoding: .utf8) ?? "")
+                    .split(whereSeparator: \.isNewline)
+                    .map(String.init)
+                guard let lastLine = lines.last(where: { !$0.isEmpty }),
+                      FileManager.default.fileExists(atPath: lastLine) else {
+                    continuation.resume(throwing: DemoError.cacheDirNotResolved)
+                    return
+                }
+                continuation.resume(returning: URL(fileURLWithPath: lastLine))
+            }
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(throwing: DemoError.spawnFailed(message: "\(error)"))
+            }
+        }
+    }
+
+    enum DemoError: Error, CustomStringConvertible {
+        case fetchExitNonZero(code: Int)
+        case cacheDirNotResolved
+        case spawnFailed(message: String)
+        var description: String {
+            switch self {
+            case .fetchExitNonZero(let code): "fetch-demo-images.sh exited with code \(code)"
+            case .cacheDirNotResolved: "fetch script ran but did not print a cache directory path"
+            case .spawnFailed(let msg): "could not spawn fetch script: \(msg)"
+            }
+        }
+    }
 
     /// Called when the user drops folders / files on the window.
     ///
@@ -174,7 +262,13 @@ final class AppViewModel {
     }
 
     /// "Remove background from N" → enqueue every `.raw` / `.error` file.
+    ///
+    /// No-op when the binary is missing: the UI shows `MissingBinaryView` and disables
+    /// the toolbar action, so this is the explicit assertion of that invariant rather
+    /// than a fallback.
     func processAll() async {
+        guard let runner else { return }
+
         for idx in files.indices where files[idx].state.isRequeueable {
             files[idx].state = .queued
         }
@@ -216,8 +310,8 @@ final class AppViewModel {
     private func markFinished(id: UUID, result: Result<RunResult, Error>) {
         guard let idx = files.firstIndex(where: { $0.id == id }) else { return }
         switch result {
-        case .success:
-            files[idx].state = .done(milliseconds: 0) // ms not tracked in v0.1 — placeholder
+        case .success(let outcome):
+            files[idx].state = .done(milliseconds: outcome.durationMillis)
         case .failure(let err):
             files[idx].state = .error(message: "\(err)")
             logger.error("file \(id.uuidString, privacy: .public) failed: \(String(describing: err), privacy: .public)")
@@ -236,10 +330,3 @@ final class AppViewModel {
     }
 }
 
-/// Stand-in runner installed when `BinaryLocator` fails. Always throws — the UI must
-/// branch on `bootState != .ready` and never call into the runner anyway.
-private struct StubMissingRunner: BgBgOneRunning {
-    func run(arguments: [String]) async throws -> RunResult {
-        throw RunnerError.binaryNotExecutable(URL(fileURLWithPath: "/dev/null"))
-    }
-}

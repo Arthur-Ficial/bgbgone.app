@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "notes": "10 public-domain images from Wikimedia Commons. Uses the Special:FilePath redirect so URLs survive Wikimedia's internal storage moves. Each entry's license is one of CC0 / PD-US / PD-USGov / PD-old (>=US public domain at year of publication). The bgbgone-app downloads these into ~/Library/Caches/bgbgone-app/demo/ on first Demo Mode launch.",
+  "images": [
+    {
+      "filename": "01-cat.jpg",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Cat03.jpg?width=1024",
+      "license": "CC-BY-SA-3.0",
+      "attribution": "Alvesgaspar, Wikimedia Commons (CC BY-SA 3.0)",
+      "subject": "animal — short-hair cat against patterned backdrop",
+      "exercises": "--type animal, soft fur edges"
+    },
+    {
+      "filename": "02-trumpet.jpg",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Bach_Stradivarius_180S37G.jpg?width=1024",
+      "license": "CC-BY-SA-3.0",
+      "attribution": "tdroyal, Wikimedia Commons (CC BY-SA 3.0)",
+      "subject": "product — brass instrument on neutral background",
+      "exercises": "--type product, metallic specular highlights"
+    },
+    {
+      "filename": "03-portrait.jpg",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Sample_face.jpg?width=1024",
+      "license": "PD",
+      "attribution": "Wikimedia Commons public domain",
+      "subject": "portrait — single face, neutral lighting",
+      "exercises": "--type person, hair/skin edges"
+    },
+    {
+      "filename": "04-sunflower.jpg",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Sunflower_sky_backdrop.jpg?width=1024",
+      "license": "CC-BY-SA-3.0",
+      "attribution": "Wikimedia Commons (CC BY-SA 3.0)",
+      "subject": "botanical — sunflower against sky",
+      "exercises": "--type graphic, intricate petal silhouette"
+    },
+    {
+      "filename": "05-classic-car.jpg",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/1958_Chevrolet_Bel_Air_(34064886166).jpg?width=1024",
+      "license": "CC-BY-2.0",
+      "attribution": "Greg Gjerdingen via Wikimedia Commons (CC BY 2.0)",
+      "subject": "vehicle — classic car on grass",
+      "exercises": "--type car, complex underbody / wheels"
+    },
+    {
+      "filename": "06-apple-pie.jpg",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Apple_pie.jpg?width=1024",
+      "license": "CC-BY-2.0",
+      "attribution": "Dan Parsons via Wikimedia Commons (CC BY 2.0)",
+      "subject": "food — pastry on plate",
+      "exercises": "default auto, organic edge"
+    },
+    {
+      "filename": "07-glass.jpg",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Glass_of_water.jpg?width=1024",
+      "license": "CC-BY-SA-3.0",
+      "attribution": "Wikimedia Commons (CC BY-SA 3.0)",
+      "subject": "translucent — water glass on white",
+      "exercises": "alpha edge cases on transparent subject"
+    },
+    {
+      "filename": "08-png-transparent.png",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/PNG_transparency_demonstration_1.png?width=1024",
+      "license": "CC-BY-SA-3.0",
+      "attribution": "POV-Ray render, Wikimedia Commons (CC BY-SA 3.0)",
+      "subject": "already-transparent test PNG",
+      "exercises": "passthrough — what does bgbgone do with pre-existing alpha?"
+    },
+    {
+      "filename": "09-statue.jpg",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/David_von_Michelangelo.jpg?width=1024",
+      "license": "PD-art",
+      "attribution": "Photograph of public-domain artwork (PD-art), Wikimedia Commons",
+      "subject": "architectural — statue against sky",
+      "exercises": "subject vs sky ambiguity, fine detail (curly hair, fingers)"
+    },
+    {
+      "filename": "10-shoe.jpg",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Adidas_Continental_80_Greyone_Conavy_(EE5577)_(cropped).jpg?width=1024",
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Wikimedia Commons (CC BY-SA 4.0)",
+      "subject": "product — sneaker on flat background",
+      "exercises": "--type product, complex lace pattern"
+    }
+  ]
+}

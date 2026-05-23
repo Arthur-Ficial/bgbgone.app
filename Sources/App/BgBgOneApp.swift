@@ -20,6 +20,8 @@ struct ContentView: View {
     @State private var isDropTargeted = false
     @State private var isInspectorPresented: Bool = true
     @State private var isDebugOpen: Bool = ProcessInfo.processInfo.arguments.contains("--debug")
+    @State private var demoAttributionShown: Bool = false
+    @State private var demoManifest: DemoManifest? = nil
 
     var body: some View {
         Group {
@@ -54,11 +56,32 @@ struct ContentView: View {
         NavigationSplitView {
             SourceSidebar(viewModel: viewModel)
         } detail: {
-            FileListView(viewModel: viewModel) {
-                viewModel.dismissSummary()
-            }
+            FileListView(
+                viewModel: viewModel,
+                onTryDemo: requestDemo,
+                onDismissSummary: { viewModel.dismissSummary() }
+            )
             .navigationTitle("bgbgone")
             .navigationSubtitle(subtitle)
+            .sheet(isPresented: $demoAttributionShown) {
+                if let manifest = demoManifest {
+                    DemoAttributionView(
+                        manifest: manifest,
+                        onConfirm: {
+                            demoAttributionShown = false
+                            startDemo()
+                        },
+                        onCancel: { demoAttributionShown = false }
+                    )
+                } else {
+                    VStack {
+                        Text("Could not load demo-manifest.json")
+                            .font(.headline)
+                        Button("OK") { demoAttributionShown = false }
+                    }
+                    .padding(40)
+                }
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 StatusBar(viewModel: viewModel)
             }
@@ -141,6 +164,19 @@ struct ContentView: View {
         panel.allowedContentTypes = [.image]
         guard panel.runModal() == .OK else { return }
         Task { await viewModel.handleDrop(urls: panel.urls) }
+    }
+
+    private func requestDemo() {
+        demoManifest = DemoManifest.loadFromBundle()
+        demoAttributionShown = true
+    }
+
+    private func startDemo() {
+        guard let script = DemoManifest.scriptURL(),
+              let manifest = DemoManifest.manifestURL() else {
+            return
+        }
+        Task { await viewModel.startDemo(scriptURL: script, manifestURL: manifest) }
     }
 }
 

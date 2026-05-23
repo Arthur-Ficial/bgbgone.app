@@ -43,9 +43,13 @@ struct BgBgOneRunner: BgBgOneRunning {
         logger.debug("spawn: \(cmdLine, privacy: .public)")
         Task { @MainActor in DebugLog.shared.append(category: "spawn", message: cmdLine) }
 
+        let clock = ContinuousClock()
+        let start = clock.now
+
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<RunResult, Error>) in
                 process.terminationHandler = { proc in
+                    let elapsed = clock.now - start
                     let stdoutData = (try? stdout.fileHandleForReading.readToEnd()) ?? Data()
                     let stderrData = (try? stderr.fileHandleForReading.readToEnd()) ?? Data()
                     let stderrTail = Self.tail(of: stderrData, lines: 8)
@@ -63,8 +67,8 @@ struct BgBgOneRunner: BgBgOneRunning {
                             return
                         }
                         do {
-                            let result = try JSONDecoder().decode(RunResult.self, from: jsonLine)
-                            continuation.resume(returning: result)
+                            let decoded = try JSONDecoder().decode(RunResult.self, from: jsonLine)
+                            continuation.resume(returning: decoded.withDuration(millis: Self.millis(from: elapsed)))
                         } catch {
                             continuation.resume(throwing: RunnerError.malformedJSON)
                         }
@@ -113,5 +117,11 @@ struct BgBgOneRunner: BgBgOneRunning {
         guard let text = String(data: data, encoding: .utf8) else { return "" }
         let split = text.split(whereSeparator: \.isNewline)
         return split.suffix(lines).joined(separator: "\n")
+    }
+
+    /// `Duration` → integer milliseconds. `Duration.components` is `(seconds, attoseconds)`.
+    private static func millis(from duration: Duration) -> Int {
+        let comps = duration.components
+        return Int(comps.seconds) * 1000 + Int(comps.attoseconds / 1_000_000_000_000_000)
     }
 }

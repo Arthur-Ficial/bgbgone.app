@@ -118,38 +118,65 @@
   .row{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;gap:8px}
   .row .k{color:var(--muted)}
   .row .v{font-family:var(--mono);font-size:11px;color:#222;text-align:right;overflow:hidden;text-overflow:ellipsis}
-  .form .frow{display:grid;grid-template-columns:90px 1fr;align-items:center;gap:10px;margin-bottom:8px;font-size:12px}
-  .form .frow label{color:var(--muted);text-align:right}
-  .form input,.form select,.form .seg{width:100%;padding:3px 6px;font-size:12px;border:1px solid var(--line);border-radius:5px;background:#fff}
-  .seg{display:flex;padding:0;overflow:hidden}
-  .seg span{flex:1;text-align:center;padding:4px 0;border-right:1px solid var(--line);cursor:default;font-size:11px;background:#fff}
-  .seg span:last-child{border-right:0}
-  .seg span.on{background:#0a84ff;color:#fff}
-  .seg.sm span{font-size:10px;padding:3px 0}
-  .form select{width:100%;padding:3px 6px;font-size:12px;border:1px solid var(--line);border-radius:5px;background:#fff}
-  .rng{display:flex;align-items:center;gap:8px}
-  .rng input[type=range]{flex:1;min-width:0}
-  .rngv{font-family:var(--mono);font-size:10px;color:#555;min-width:80px;text-align:right}
-  .check{margin:3px 0 3px 100px;font-size:12px;color:#444}
-  .check label{display:flex;align-items:center;gap:6px;cursor:default}
-  .arow{
-    display:grid;grid-template-columns:18px 90px 1fr;align-items:center;
-    gap:10px;margin-bottom:8px;font-size:12px;
+  /* === STACKED FORM (narrow-column friendly) === */
+  .form .field{margin-bottom:12px}
+  .form .field .lbl{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-size:11px;color:var(--muted);margin-bottom:4px;
   }
-  .arow > label{color:var(--muted);text-align:right;cursor:default}
-  .arow.off > label,.arow.off .ctrl{color:#bbb}
-  .arow.off .ctrl input,.arow.off .ctrl select,.arow.off .ctrl .seg span,
-  .arow.off .ctrl .rngv{color:#bbb !important;pointer-events:none}
-  .arow.off .ctrl input[type=range]{filter:grayscale(1) opacity(.45)}
-  .arow.off .ctrl .seg{filter:grayscale(1) opacity(.55)}
+  .form .field .lbl b{color:#222;font-weight:600;font-size:12px}
+  .form .field .lbl .val{font-family:var(--mono);color:#555;font-size:11px}
+  .form input,.form select,.form .seg{
+    width:100%;padding:5px 8px;font-size:12px;
+    border:1px solid var(--line);border-radius:5px;background:#fff;
+  }
+  .form input[type=range]{width:100%;padding:0;background:transparent;border:0;height:22px}
+  .seg{display:flex;padding:0;overflow:hidden;border:1px solid var(--line);border-radius:5px}
+  .seg span{
+    flex:1;text-align:center;padding:5px 0;border-right:1px solid var(--line);
+    cursor:default;font-size:11px;background:#fff;color:#222;
+  }
+  .seg span:last-child{border-right:0}
+  .seg span.on{background:#0a84ff;color:#fff;font-weight:600}
+  .check{margin:6px 0;font-size:12px;color:#222}
+  .check label{display:flex;align-items:center;gap:8px;cursor:default;padding:3px 0}
+  .check input{margin:0}
+  /* === STACKED arow (narrow-column friendly) ===
+     Label-row on top (label left, ⟲ reset chip right), control-row full-width below. */
+  .arow{display:block;margin-bottom:10px;font-size:12px}
+  .arow .lbl{
+    display:flex;align-items:baseline;justify-content:space-between;
+    gap:8px;margin-bottom:3px;
+  }
+  .arow .lbl label{color:#333;cursor:default;font-size:11px}
+  .arow .lbl .hint{color:#9aa;font-size:10px;font-style:italic;font-weight:400}
+  .arow .lbl .reset{
+    opacity:0;font-size:11px;color:var(--accent);cursor:default;
+    padding:0 4px;border-radius:3px;
+  }
+  .arow .lbl .reset:hover{background:#e8f1ff}
   .arow .ctrl{display:flex;align-items:center;gap:6px;min-width:0}
-  .arow input[type=checkbox]{margin:0}
-  .arow .ctrl select,.arow .ctrl input[type=text]{width:100%;padding:3px 6px;font-size:12px;border:1px solid var(--line);border-radius:5px;background:#fff}
+  .arow .ctrl select,
+  .arow .ctrl input[type=text]{
+    width:100%;padding:4px 6px;font-size:12px;
+    border:1px solid var(--line);border-radius:5px;background:#fff;
+  }
   .arow .ctrl .rng{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
-  .arow .ctrl .rng input[type=range]{flex:1;min-width:0}
-  .arow.toggle{grid-template-columns:18px 1fr;gap:8px}
-  .arow.toggle > label{text-align:left;color:#333}
-  .arow.toggle.off > label{color:#bbb}
+  .arow .ctrl .rng input[type=range]{flex:1;min-width:0;padding:0}
+  .arow .ctrl .rngv{
+    font-family:var(--mono);font-size:10px;color:#555;
+    min-width:48px;text-align:right;
+  }
+  /* changed-from-default: yellow tint + bold label + visible ⟲ reset */
+  .arow.changed{background:#fff7e0;border-radius:4px;padding:4px 6px;margin:-4px -6px 6px}
+  .arow.changed .lbl label{color:#000;font-weight:600}
+  .arow.changed .lbl .reset{opacity:1}
+  /* dependent-disabled (e.g. Quality requires JPEG/HEIC) */
+  .arow.dep-off{opacity:.5}
+  .arow.dep-off .ctrl input,
+  .arow.dep-off .ctrl select,
+  .arow.dep-off .ctrl .seg span{pointer-events:none}
+  .arow.dep-off .ctrl input[type=range]{filter:grayscale(1)}
   .rerun-btn{
     width:100%;padding:7px 0;font-weight:600;font-size:12px;
     background:linear-gradient(#f5f5f7,#e6e6ea);
@@ -158,9 +185,59 @@
   }
   .rerun-btn[disabled]{opacity:.45}
   .rerun-btn b{color:var(--accent)}
-  .adv{margin-top:10px;padding-top:8px;border-top:1px dashed #d4d4d4}
+  .adv{margin-top:14px;padding-top:10px;border-top:1px solid #d4d4d4}
   .advhead{font-size:11px;color:var(--muted);margin-bottom:6px;cursor:default}
   .advhead small{color:#aaa}
+  .advmaster{
+    display:flex;align-items:center;gap:8px;font-size:12px;color:#222;
+    padding:6px 8px;margin:-6px -8px 6px;border-radius:6px;cursor:default;
+  }
+  .advmaster:hover{background:#eee}
+  .advmaster input{margin:0}
+  .advmaster b{font-weight:600}
+  .advmaster .count{
+    margin-left:auto;background:#0a84ff;color:#fff;font-size:10px;
+    font-weight:700;padding:1px 7px;border-radius:9px;
+  }
+  .advmaster .count.zero{background:#d6d6d6;color:#666}
+  .advmaster .resetall{
+    color:var(--accent);font-size:11px;cursor:default;text-decoration:none;
+    padding:2px 4px;
+  }
+  .advbody.off{filter:grayscale(1) opacity(.45);pointer-events:none}
+  .advbody.off input,.advbody.off select,.advbody.off button{pointer-events:none}
+  .disclosure{
+    border-radius:6px;overflow:hidden;margin-bottom:6px;border:1px solid #e3e3e3;
+  }
+  .disc-head{
+    display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;
+    padding:7px 10px;background:#f0f0f2;cursor:default;color:#222;
+  }
+  .disc-head:hover{background:#e7e7ea}
+  .disc-head .chev{font-size:9px;color:#666;width:10px}
+  .disc-head .badge{
+    margin-left:auto;font-size:10px;font-weight:700;padding:1px 7px;border-radius:9px;
+    background:#0a84ff;color:#fff;
+  }
+  .disc-head .badge.zero{background:#d6d6d6;color:#666}
+  .disc-body{padding:8px 10px;background:#fafafa;display:none}
+  .disclosure.open .disc-body{display:block}
+  .disclosure.open .disc-head .chev{transform:rotate(0deg)}
+  .arow .reset{
+    opacity:0;font-size:11px;color:var(--accent);cursor:default;
+    padding:1px 5px;border:1px solid transparent;border-radius:4px;
+  }
+  .arow.changed .reset{opacity:1}
+  .arow.changed > label{color:#000;font-weight:600}
+  .arow.changed{background:#fff7e0;border-radius:4px;padding:2px 4px;margin-left:-4px}
+  .arow .reset:hover{background:#e8f1ff}
+  .flagstrip{
+    margin-top:10px;padding:8px 10px;background:#1e1e1e;border-radius:6px;
+    font-family:var(--mono);font-size:10px;color:#7dd3fc;line-height:1.5;
+    word-break:break-all;
+  }
+  .flagstrip .lbl{color:#888;display:block;font-size:9px;margin-bottom:3px;letter-spacing:.04em;text-transform:uppercase}
+  .flagstrip .none{color:#777;font-style:italic}
   .hist{max-height:120px;overflow:auto}
   .hist .h{font-size:11px;padding:6px 0;border-top:1px dashed #e3e3e3}
   .hist .h:first-child{border-top:0}
@@ -328,105 +405,138 @@
           </div>
 
           <div class="adv">
-            <div class="advhead">▸ Edge &amp; matte  <small>each checkbox sends one CLI flag</small></div>
-
-            <div class="arow off">
-              <input type="checkbox">
-              <label>Edge feather</label>
-              <div class="ctrl"><div class="rng"><input type="range" min="0" max="10" value="1"><span class="rngv">1 px</span></div></div>
-            </div>
-            <div class="arow off">
-              <input type="checkbox">
-              <label>Mask threshold</label>
-              <div class="ctrl"><div class="rng"><input type="range" min="0" max="100" value="50"><span class="rngv">0.50</span></div></div>
-            </div>
-            <div class="arow off">
-              <input type="checkbox">
-              <label>Padding</label>
-              <div class="ctrl"><div class="rng"><input type="range" min="0" max="100" value="0"><span class="rngv">0 px</span></div></div>
-            </div>
-            <div class="arow off">
-              <input type="checkbox">
-              <label>Crop margin</label>
-              <div class="ctrl"><div class="rng"><input type="range" min="0" max="100" value="0"><span class="rngv">0 px</span></div></div>
-            </div>
-            <div class="arow toggle off">
-              <input type="checkbox">
-              <label>Tight crop to subject <small style="color:#9aa">--crop</small></label>
-            </div>
-            <div class="arow toggle off">
-              <input type="checkbox">
-              <label>Keep semi-transparent matte <small style="color:#9aa">--semitransparency</small></label>
+            <!-- MASTER TOGGLE: one checkbox gates the whole block. Count badge = active overrides. -->
+            <label class="advmaster" title="Off = clean bgbgone defaults. On = the values below are sent as flags.">
+              <input type="checkbox" checked>
+              <b>Advanced</b>
+              <span class="count">3 active</span>
+              <span class="resetall" title="Reset every advanced setting to default">⟲ Reset all</span>
+            </label>
+            <div class="advhead" style="margin:2px 0 8px;font-style:italic">
+              off = clean bgbgone defaults (no extra flags). on = the values below are sent.
             </div>
 
-            <div class="advhead" style="margin-top:14px">▸ Canvas &amp; placement</div>
-            <div class="arow off">
-              <input type="checkbox">
-              <label>Subject scale</label>
-              <div class="ctrl"><div class="rng"><input type="range" min="10" max="100" value="100"><span class="rngv">100 %</span></div></div>
-            </div>
-            <div class="arow off">
-              <input type="checkbox">
-              <label>Position</label>
-              <div class="ctrl"><select><option>Center</option><option>Top-left</option><option>Top-right</option><option>Bottom-left</option><option>Bottom-right</option><option>Custom x% y%…</option></select></div>
-            </div>
-            <div class="arow off">
-              <input type="checkbox">
-              <label>Region of interest</label>
-              <div class="ctrl"><input type="text" placeholder='x1 y1 x2 y2 (px or %)'></div>
-            </div>
+            <div class="advbody">
 
-            <div class="advhead" style="margin-top:14px">▸ Shadow</div>
-            <div class="arow toggle off">
-              <input type="checkbox">
-              <label>Drop shadow under cutout <small style="color:#9aa">--shadow</small></label>
-            </div>
-            <div class="arow off">
-              <input type="checkbox">
-              <label>Shadow type</label>
-              <div class="ctrl"><select><option>Auto</option><option>Drop</option><option>3D</option><option>Car</option><option>None</option></select></div>
-            </div>
-            <div class="arow off">
-              <input type="checkbox">
-              <label>Shadow opacity</label>
-              <div class="ctrl"><div class="rng"><input type="range" min="0" max="100" value="50"><span class="rngv">50</span></div></div>
-            </div>
+              <!-- GROUP 1: Edge & matte (2 active) -->
+              <div class="disclosure open">
+                <div class="disc-head">
+                  <span class="chev">▾</span>Edge &amp; matte
+                  <span class="badge">2</span>
+                </div>
+                <div class="disc-body">
+                  <div class="arow changed">
+                    <div class="lbl"><label>Edge feather</label><span class="reset" title="Reset to 1 px">⟲</span></div>
+                    <div class="ctrl"><div class="rng"><input type="range" min="0" max="10" value="2"><span class="rngv">2 px</span></div></div>
+                  </div>
+                  <div class="arow">
+                    <div class="lbl"><label>Mask threshold</label><span class="reset">⟲</span></div>
+                    <div class="ctrl"><div class="rng"><input type="range" min="0" max="100" value="50"><span class="rngv">0.50</span></div></div>
+                  </div>
+                  <div class="arow changed">
+                    <div class="lbl"><label>Padding</label><span class="reset" title="Reset to 0 px">⟲</span></div>
+                    <div class="ctrl"><div class="rng"><input type="range" min="0" max="100" value="24"><span class="rngv">24 px</span></div></div>
+                  </div>
+                  <div class="arow">
+                    <div class="lbl"><label>Crop margin</label><span class="reset">⟲</span></div>
+                    <div class="ctrl"><div class="rng"><input type="range" min="0" max="100" value="0"><span class="rngv">0 px</span></div></div>
+                  </div>
+                  <div class="check"><label><input type="checkbox"> Tight crop to subject</label></div>
+                  <div class="check"><label><input type="checkbox" checked> Keep semi-transparent matte</label></div>
+                </div>
+              </div>
 
-            <div class="advhead" style="margin-top:14px">▸ Output channels &amp; size</div>
-            <div class="arow toggle off">
-              <input type="checkbox">
-              <label>Output alpha mask only <small style="color:#9aa">--mask-only</small></label>
-            </div>
-            <div class="arow off">
-              <input type="checkbox">
-              <label>Channels</label>
-              <div class="ctrl"><div class="seg sm"><span class="on">RGBA</span><span>Alpha</span></div></div>
-            </div>
-            <div class="arow off">
-              <input type="checkbox">
-              <label>Output size cap</label>
-              <div class="ctrl"><div class="seg sm"><span class="on">Auto</span><span>Preview</span><span>50 MP</span><span>Full</span></div></div>
-            </div>
-            <div class="arow off">
-              <input type="checkbox">
-              <label>Quality</label>
-              <div class="ctrl"><div class="rng"><input type="range" min="1" max="100" value="92"><span class="rngv">92</span></div></div>
-            </div>
+              <!-- GROUP 2: Canvas & placement (1 active) -->
+              <div class="disclosure open">
+                <div class="disc-head">
+                  <span class="chev">▾</span>Canvas &amp; placement
+                  <span class="badge">1</span>
+                </div>
+                <div class="disc-body">
+                  <div class="arow changed">
+                    <div class="lbl"><label>Subject scale</label><span class="reset" title="Reset to 100 %">⟲</span></div>
+                    <div class="ctrl"><div class="rng"><input type="range" min="10" max="100" value="80"><span class="rngv">80 %</span></div></div>
+                  </div>
+                  <div class="arow">
+                    <div class="lbl"><label>Position</label><span class="reset">⟲</span></div>
+                    <div class="ctrl"><select><option>Original</option><option>Center</option><option>Top-left</option><option>Top-right</option><option>Bottom-left</option><option>Bottom-right</option><option>Custom x% y%…</option></select></div>
+                  </div>
+                  <div class="arow">
+                    <div class="lbl"><label>Region of interest</label><span class="reset">⟲</span></div>
+                    <div class="ctrl"><input type="text" placeholder='x1 y1 x2 y2 (px or %) — empty = whole image'></div>
+                  </div>
+                </div>
+              </div>
 
-            <div class="advhead" style="margin-top:14px">▸ Algorithm &amp; multi</div>
-            <div class="arow off">
-              <input type="checkbox">
-              <label>Algorithm</label>
-              <div class="ctrl"><select><option>Auto</option><option>Vision mask</option><option>Person</option><option>Saliency</option></select></div>
-            </div>
-            <div class="arow toggle off">
-              <input type="checkbox">
-              <label>One file per detected instance <small style="color:#9aa">--multi</small></label>
-            </div>
-            <div class="arow off">
-              <input type="checkbox">
-              <label>Instance naming</label>
-              <div class="ctrl"><input type="text" value="{base}-{n}.{ext}"></div>
+              <!-- GROUP 3: Shadow (0 active — collapsed for screenshot variety) -->
+              <div class="disclosure">
+                <div class="disc-head">
+                  <span class="chev">▸</span>Shadow
+                  <span class="badge zero">0</span>
+                </div>
+                <div class="disc-body">
+                  <div class="check"><label><input type="checkbox"> Drop shadow under cutout</label></div>
+                  <div class="arow dep-off">
+                    <div class="lbl"><label>Shadow type</label><span class="hint">needs Drop shadow on</span></div>
+                    <div class="ctrl"><select><option>Auto</option><option>Drop</option><option>3D</option><option>Car</option><option>None</option></select></div>
+                  </div>
+                  <div class="arow dep-off">
+                    <div class="lbl"><label>Shadow opacity</label><span class="hint">needs Drop shadow on</span></div>
+                    <div class="ctrl"><div class="rng"><input type="range" min="0" max="100" value="50"><span class="rngv">auto</span></div></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- GROUP 4: Output channels & size (0 active) -->
+              <div class="disclosure open">
+                <div class="disc-head">
+                  <span class="chev">▾</span>Output channels &amp; size
+                  <span class="badge zero">0</span>
+                </div>
+                <div class="disc-body">
+                  <div class="check"><label><input type="checkbox"> Output alpha mask only</label></div>
+                  <div class="arow">
+                    <div class="lbl"><label>Channels</label><span class="reset">⟲</span></div>
+                    <div class="ctrl"><div class="seg sm"><span class="on">RGBA</span><span>Alpha</span></div></div>
+                  </div>
+                  <div class="arow">
+                    <div class="lbl"><label>Output size cap</label><span class="reset">⟲</span></div>
+                    <div class="ctrl"><div class="seg sm"><span class="on">Auto</span><span>Preview</span><span>50 MP</span><span>Full</span></div></div>
+                  </div>
+                  <div class="arow dep-off">
+                    <div class="lbl"><label>Quality</label><span class="hint">needs JPEG/HEIC/AVIF</span></div>
+                    <div class="ctrl"><div class="rng"><input type="range" min="1" max="100" value="92"><span class="rngv">92</span></div></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- GROUP 5: Algorithm & multi (0 active) -->
+              <div class="disclosure open">
+                <div class="disc-head">
+                  <span class="chev">▾</span>Algorithm &amp; multi
+                  <span class="badge zero">0</span>
+                </div>
+                <div class="disc-body">
+                  <div class="arow">
+                    <div class="lbl"><label>Algorithm</label><span class="reset">⟲</span></div>
+                    <div class="ctrl"><select><option>Auto</option><option>Vision mask</option><option>Person</option><option>Saliency</option></select></div>
+                  </div>
+                  <div class="check"><label><input type="checkbox"> One file per detected instance (multi)</label></div>
+                  <div class="arow dep-off">
+                    <div class="lbl"><label>Instance naming</label><span class="hint">needs multi on</span></div>
+                    <div class="ctrl"><input type="text" value="{base}-{n}.{ext}"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- LIVE FLAG-STRIP: shows exactly what gets appended to the bgbgone call. -->
+              <div class="flagstrip" title="The 3 active overrides below are the only flags added to the bgbgone call. Everything else stays at default and is omitted.">
+                <span class="lbl">bgbgone flags · 3 overrides</span>
+                bgbgone <span style="color:#fff">"~/Pictures/summer-shoot/IMG_0142.jpg"</span> \<br>
+                &nbsp;&nbsp;<span style="color:#facc15">--feather 2</span> \<br>
+                &nbsp;&nbsp;<span style="color:#facc15">--pad 24</span> \<br>
+                &nbsp;&nbsp;<span style="color:#facc15">--scale 0.80</span>
+              </div>
             </div>
           </div>
         </div>

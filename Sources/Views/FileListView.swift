@@ -4,6 +4,7 @@ import SwiftUI
 /// context menu. Drives `AppViewModel.selectedId` (single) for the inspector preview.
 struct FileListView: View {
     @Bindable var viewModel: AppViewModel
+    let onTryDemo: () -> Void
     let onDismissSummary: () -> Void
 
     @State private var sortOrder: [KeyPathComparator<ImageFile>] = [
@@ -80,16 +81,19 @@ struct FileListView: View {
     }
 
     @ViewBuilder private var emptyState: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             Image(systemName: "tray.and.arrow.down")
                 .font(.system(size: 44, weight: .ultraLight))
                 .foregroundStyle(.tertiary)
             Text("Drop a folder or images here")
                 .font(.headline)
                 .foregroundStyle(.primary)
-            Text("or use Add files…")
+            Text("or use Add files… in the toolbar")
                 .font(.callout)
                 .foregroundStyle(.secondary)
+            Button("Try Demo (10 public-domain images)", action: onTryDemo)
+                .buttonStyle(.bordered)
+                .padding(.top, 6)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.background)

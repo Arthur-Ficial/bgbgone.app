@@ -92,6 +92,82 @@ final class AppViewModel {
     func handleDragLeave() { dropMachine.handleDragLeave() }
     func dismissSummary() { dropMachine.dismissSummary() }
 
+    // MARK: - Demo Mode
+
+    /// Demo download state — drives an attribution sheet + progress UI.
+    var demoState: DemoState = .idle
+
+    enum DemoState: Equatable {
+        case idle
+        case fetching
+        case failed(message: String)
+    }
+
+    /// Downloads the 10 public-domain demo images (manifest at scripts/demo-manifest.json),
+    /// then ingests the cache dir exactly like a user-dropped folder. Real script, real
+    /// curl, real attribution; no fake/sample files baked into the bundle.
+    func startDemo(scriptURL: URL, manifestURL: URL) async {
+        demoState = .fetching
+        defer {
+            if case .fetching = demoState { demoState = .idle }
+        }
+
+        do {
+            let cacheDir = try await runFetchScript(scriptURL: scriptURL, manifestURL: manifestURL)
+            await handleDrop(urls: [cacheDir])
+            demoState = .idle
+        } catch {
+            demoState = .failed(message: "\(error)")
+            logger.error("demo fetch failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    private func runFetchScript(scriptURL: URL, manifestURL: URL) async throws -> URL {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/bash")
+            process.arguments = [scriptURL.path]
+            let stdout = Pipe()
+            process.standardOutput = stdout
+            process.standardError = Pipe()
+            process.terminationHandler = { proc in
+                let data = (try? stdout.fileHandleForReading.readToEnd()) ?? Data()
+                guard proc.terminationStatus == 0 else {
+                    continuation.resume(throwing: DemoError.fetchExitNonZero(code: Int(proc.terminationStatus)))
+                    return
+                }
+                // The script prints the cache dir as its last stdout line.
+                let lines = (String(data: data, encoding: .utf8) ?? "")
+                    .split(whereSeparator: \.isNewline)
+                    .map(String.init)
+                guard let lastLine = lines.last(where: { !$0.isEmpty }),
+                      FileManager.default.fileExists(atPath: lastLine) else {
+                    continuation.resume(throwing: DemoError.cacheDirNotResolved)
+                    return
+                }
+                continuation.resume(returning: URL(fileURLWithPath: lastLine))
+            }
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(throwing: DemoError.spawnFailed(message: "\(error)"))
+            }
+        }
+    }
+
+    enum DemoError: Error, CustomStringConvertible {
+        case fetchExitNonZero(code: Int)
+        case cacheDirNotResolved
+        case spawnFailed(message: String)
+        var description: String {
+            switch self {
+            case .fetchExitNonZero(let code): "fetch-demo-images.sh exited with code \(code)"
+            case .cacheDirNotResolved: "fetch script ran but did not print a cache directory path"
+            case .spawnFailed(let msg): "could not spawn fetch script: \(msg)"
+            }
+        }
+    }
+
     /// Called when the user drops folders / files on the window.
     ///
     /// Folders are scanned recursively (one `Batch` per folder); loose images go into

@@ -43,3 +43,22 @@ jobs:
             echo "::error::Forbidden image-processing framework imported under Sources/"
             exit 1
           fi
+
+  ui-snapshot:
+    name: UI screenshots
+    runs-on: macos-26
+    timeout-minutes: 12
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build app bundle
+        run: make app
+      - name: Capture screenshots
+        run: make screenshots
+      - name: Upload screenshots artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshots-${{ github.sha }}
+          path: build/screenshots/
+          if-no-files-found: warn

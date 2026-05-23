@@ -4,7 +4,7 @@ APP_DIR    ?= /Applications
 BIN_DIR    ?= $(HOME)/.local/bin
 SCRATCH    = --scratch-path build
 
-.PHONY: build test app run dist install install-app install-cli release clean
+.PHONY: build test app run dist install install-app install-cli release clean screenshots
 
 build:
 	swift build -c release $(SCRATCH)
@@ -17,6 +17,11 @@ app:
 
 run: app
 	open "$(APP_BUNDLE)"
+
+# Drive the running app through its UI states, capturing one PNG per state. CI uploads
+# the resulting build/screenshots/ as an artifact.
+screenshots: app
+	./scripts/screenshot-tour.sh
 
 dist:
 	./scripts/build-dist.sh

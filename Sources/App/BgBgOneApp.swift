@@ -54,7 +54,7 @@ struct ContentView: View {
             DualPreview(
                 selected: viewModel.files.first(where: { $0.id == viewModel.selectedId }),
                 isEmpty: viewModel.files.isEmpty,
-                background: viewModel.config.background,
+                config: viewModel.config,
                 onPickFolder: pickFolder,
                 onPickFiles: addFiles
             )

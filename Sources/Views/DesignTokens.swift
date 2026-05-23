@@ -27,19 +27,6 @@ enum DesignColor {
     static let amber        = Color(red: 215/255, green: 145/255, blue: 30/255)
     static let red          = Color(red: 220/255, green: 56/255,  blue: 45/255)
 
-    /// Title-bar traffic light reds/yellows/greens.
-    static let trafficRed    = Color(red: 255/255, green: 95/255,  blue: 87/255)  // #ff5f57
-    static let trafficYellow = Color(red: 254/255, green: 188/255, blue: 46/255)  // #febc2e
-    static let trafficGreen  = Color(red: 40/255,  green: 200/255, blue: 64/255)  // #28c840
-
-    /// Background gradient on the outer canvas. The window itself uses `bg`.
-    static let outerGradient = LinearGradient(
-        colors: [
-            Color(red: 220/255, green: 230/255, blue: 240/255),
-            Color(red: 210/255, green: 215/255, blue: 230/255),
-        ],
-        startPoint: .topLeading, endPoint: .bottomTrailing
-    )
 }
 
 enum DesignRadius {

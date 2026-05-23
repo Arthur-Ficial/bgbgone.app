@@ -146,9 +146,9 @@ private struct EmptyDropPane: View {
             if isEmpty {
                 HStack(spacing: 8) {
                     Button("Choose folder…", action: onPickFolder)
-                        .buttonStyle(PrimaryButtonStyle())
+                        .buttonStyle(.borderedProminent)
                     Button("Choose files…", action: onPickFiles)
-                        .buttonStyle(GhostButtonStyle())
+                        .buttonStyle(.bordered)
                 }
                 .padding(.top, 6)
             }

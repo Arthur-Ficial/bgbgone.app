@@ -132,6 +132,32 @@
   .rngv{font-family:var(--mono);font-size:10px;color:#555;min-width:80px;text-align:right}
   .check{margin:3px 0 3px 100px;font-size:12px;color:#444}
   .check label{display:flex;align-items:center;gap:6px;cursor:default}
+  .arow{
+    display:grid;grid-template-columns:18px 90px 1fr;align-items:center;
+    gap:10px;margin-bottom:8px;font-size:12px;
+  }
+  .arow > label{color:var(--muted);text-align:right;cursor:default}
+  .arow.off > label,.arow.off .ctrl{color:#bbb}
+  .arow.off .ctrl input,.arow.off .ctrl select,.arow.off .ctrl .seg span,
+  .arow.off .ctrl .rngv{color:#bbb !important;pointer-events:none}
+  .arow.off .ctrl input[type=range]{filter:grayscale(1) opacity(.45)}
+  .arow.off .ctrl .seg{filter:grayscale(1) opacity(.55)}
+  .arow .ctrl{display:flex;align-items:center;gap:6px;min-width:0}
+  .arow input[type=checkbox]{margin:0}
+  .arow .ctrl select,.arow .ctrl input[type=text]{width:100%;padding:3px 6px;font-size:12px;border:1px solid var(--line);border-radius:5px;background:#fff}
+  .arow .ctrl .rng{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+  .arow .ctrl .rng input[type=range]{flex:1;min-width:0}
+  .arow.toggle{grid-template-columns:18px 1fr;gap:8px}
+  .arow.toggle > label{text-align:left;color:#333}
+  .arow.toggle.off > label{color:#bbb}
+  .rerun-btn{
+    width:100%;padding:7px 0;font-weight:600;font-size:12px;
+    background:linear-gradient(#f5f5f7,#e6e6ea);
+    border:1px solid #b8b8b8;border-radius:6px;cursor:default;
+    color:#222;margin-bottom:12px;
+  }
+  .rerun-btn[disabled]{opacity:.45}
+  .rerun-btn b{color:var(--accent)}
   .adv{margin-top:10px;padding-top:8px;border-top:1px dashed #d4d4d4}
   .advhead{font-size:11px;color:var(--muted);margin-bottom:6px;cursor:default}
   .advhead small{color:#aaa}
@@ -285,7 +311,10 @@
 
         <!-- CONFIG -->
         <div class="sec form">
-          <h5>Settings <small style="color:#9aa;font-weight:400;text-transform:none;letter-spacing:0">— unchanged = bgbgone default</small></h5>
+          <h5>Settings <small style="color:#9aa;font-weight:400;text-transform:none;letter-spacing:0">— unchecked = bgbgone default</small></h5>
+
+          <button class="rerun-btn" title="T6: trash previous cutouts, reprocess selected files with the settings below">↻ Re-run selection (<b>1</b>) with these settings</button>
+
           <div class="frow"><label>Save to</label><input value="~/Pictures/cutouts"></div>
           <div class="frow"><label>Name as</label><input value="{name}_bgbgone"></div>
           <div class="frow"><label>Background</label>
@@ -299,61 +328,105 @@
           </div>
 
           <div class="adv">
-            <div class="advhead">▸ Edge &amp; matte  <small>--feather --threshold --padding --crop-margin --semitransparency</small></div>
-            <div class="frow"><label>Edge feather</label>
-              <div class="rng"><input type="range" min="0" max="10" value="1"><span class="rngv">1 px</span></div>
-            </div>
-            <div class="frow"><label>Mask threshold</label>
-              <div class="rng"><input type="range" min="0" max="100" value="50"><span class="rngv">0.50</span></div>
-            </div>
-            <div class="frow"><label>Padding</label>
-              <div class="rng"><input type="range" min="0" max="100" value="0"><span class="rngv">0 px</span></div>
-            </div>
-            <div class="frow"><label>Crop margin</label>
-              <div class="rng"><input type="range" min="0" max="100" value="0"><span class="rngv">0 px</span></div>
-            </div>
-            <div class="check"><label><input type="checkbox"> Tight crop to subject  <small style="color:#9aa">(--crop)</small></label></div>
-            <div class="check"><label><input type="checkbox" checked> Keep semi-transparent matte pixels  <small style="color:#9aa">(--semitransparency)</small></label></div>
+            <div class="advhead">▸ Edge &amp; matte  <small>each checkbox sends one CLI flag</small></div>
 
-            <div class="advhead" style="margin-top:14px">▸ Canvas &amp; placement  <small>--scale --position --roi</small></div>
-            <div class="frow"><label>Subject scale</label>
-              <div class="rng"><input type="range" min="10" max="100" value="100"><span class="rngv">100 %</span></div>
+            <div class="arow off">
+              <input type="checkbox">
+              <label>Edge feather</label>
+              <div class="ctrl"><div class="rng"><input type="range" min="0" max="10" value="1"><span class="rngv">1 px</span></div></div>
             </div>
-            <div class="frow"><label>Position</label>
-              <select><option>Original</option><option>Center</option><option>Top-left</option><option>Top-right</option><option>Bottom-left</option><option>Bottom-right</option><option>Custom %…</option></select>
+            <div class="arow off">
+              <input type="checkbox">
+              <label>Mask threshold</label>
+              <div class="ctrl"><div class="rng"><input type="range" min="0" max="100" value="50"><span class="rngv">0.50</span></div></div>
             </div>
-            <div class="frow"><label>Region of interest</label>
-              <input placeholder='x1 y1 x2 y2 (px or %) — empty = whole image'>
+            <div class="arow off">
+              <input type="checkbox">
+              <label>Padding</label>
+              <div class="ctrl"><div class="rng"><input type="range" min="0" max="100" value="0"><span class="rngv">0 px</span></div></div>
             </div>
-
-            <div class="advhead" style="margin-top:14px">▸ Shadow  <small>--shadow --shadow-type --shadow-opacity</small></div>
-            <div class="check"><label><input type="checkbox"> Drop shadow under cutout</label></div>
-            <div class="frow"><label>Shadow type</label>
-              <select disabled><option>Auto</option><option>Drop</option><option>3D</option><option>Car</option><option>None</option></select>
+            <div class="arow off">
+              <input type="checkbox">
+              <label>Crop margin</label>
+              <div class="ctrl"><div class="rng"><input type="range" min="0" max="100" value="0"><span class="rngv">0 px</span></div></div>
             </div>
-            <div class="frow"><label>Shadow opacity</label>
-              <div class="rng"><input type="range" min="0" max="100" value="50" disabled><span class="rngv" style="color:#bbb">auto</span></div>
+            <div class="arow toggle off">
+              <input type="checkbox">
+              <label>Tight crop to subject <small style="color:#9aa">--crop</small></label>
+            </div>
+            <div class="arow toggle off">
+              <input type="checkbox">
+              <label>Keep semi-transparent matte <small style="color:#9aa">--semitransparency</small></label>
             </div>
 
-            <div class="advhead" style="margin-top:14px">▸ Output channels &amp; size  <small>--mask-only --channels --size --quality</small></div>
-            <div class="check"><label><input type="checkbox"> Output alpha mask only  <small style="color:#9aa">(--mask-only)</small></label></div>
-            <div class="frow"><label>Channels</label>
-              <div class="seg sm"><span class="on">RGBA</span><span>Alpha</span></div>
+            <div class="advhead" style="margin-top:14px">▸ Canvas &amp; placement</div>
+            <div class="arow off">
+              <input type="checkbox">
+              <label>Subject scale</label>
+              <div class="ctrl"><div class="rng"><input type="range" min="10" max="100" value="100"><span class="rngv">100 %</span></div></div>
             </div>
-            <div class="frow"><label>Output size cap</label>
-              <div class="seg sm"><span class="on">Auto</span><span>Preview</span><span>50 MP</span><span>Full</span></div>
+            <div class="arow off">
+              <input type="checkbox">
+              <label>Position</label>
+              <div class="ctrl"><select><option>Center</option><option>Top-left</option><option>Top-right</option><option>Bottom-left</option><option>Bottom-right</option><option>Custom x% y%…</option></select></div>
             </div>
-            <div class="frow"><label>Quality</label>
-              <div class="rng"><input type="range" min="1" max="100" value="92" disabled><span class="rngv" style="color:#bbb">92 (PNG: lossless)</span></div>
+            <div class="arow off">
+              <input type="checkbox">
+              <label>Region of interest</label>
+              <div class="ctrl"><input type="text" placeholder='x1 y1 x2 y2 (px or %)'></div>
             </div>
 
-            <div class="advhead" style="margin-top:14px">▸ Algorithm &amp; multi  <small>--algo --multi --instance-naming</small></div>
-            <div class="frow"><label>Algorithm</label>
-              <select><option>Auto</option><option>Vision mask</option><option>Person</option><option>Saliency</option></select>
+            <div class="advhead" style="margin-top:14px">▸ Shadow</div>
+            <div class="arow toggle off">
+              <input type="checkbox">
+              <label>Drop shadow under cutout <small style="color:#9aa">--shadow</small></label>
             </div>
-            <div class="check"><label><input type="checkbox"> One file per detected instance  <small style="color:#9aa">(--multi)</small></label></div>
-            <div class="frow"><label>Instance naming</label>
-              <input value="{base}-{n}.{ext}" disabled style="color:#bbb">
+            <div class="arow off">
+              <input type="checkbox">
+              <label>Shadow type</label>
+              <div class="ctrl"><select><option>Auto</option><option>Drop</option><option>3D</option><option>Car</option><option>None</option></select></div>
+            </div>
+            <div class="arow off">
+              <input type="checkbox">
+              <label>Shadow opacity</label>
+              <div class="ctrl"><div class="rng"><input type="range" min="0" max="100" value="50"><span class="rngv">50</span></div></div>
+            </div>
+
+            <div class="advhead" style="margin-top:14px">▸ Output channels &amp; size</div>
+            <div class="arow toggle off">
+              <input type="checkbox">
+              <label>Output alpha mask only <small style="color:#9aa">--mask-only</small></label>
+            </div>
+            <div class="arow off">
+              <input type="checkbox">
+              <label>Channels</label>
+              <div class="ctrl"><div class="seg sm"><span class="on">RGBA</span><span>Alpha</span></div></div>
+            </div>
+            <div class="arow off">
+              <input type="checkbox">
+              <label>Output size cap</label>
+              <div class="ctrl"><div class="seg sm"><span class="on">Auto</span><span>Preview</span><span>50 MP</span><span>Full</span></div></div>
+            </div>
+            <div class="arow off">
+              <input type="checkbox">
+              <label>Quality</label>
+              <div class="ctrl"><div class="rng"><input type="range" min="1" max="100" value="92"><span class="rngv">92</span></div></div>
+            </div>
+
+            <div class="advhead" style="margin-top:14px">▸ Algorithm &amp; multi</div>
+            <div class="arow off">
+              <input type="checkbox">
+              <label>Algorithm</label>
+              <div class="ctrl"><select><option>Auto</option><option>Vision mask</option><option>Person</option><option>Saliency</option></select></div>
+            </div>
+            <div class="arow toggle off">
+              <input type="checkbox">
+              <label>One file per detected instance <small style="color:#9aa">--multi</small></label>
+            </div>
+            <div class="arow off">
+              <input type="checkbox">
+              <label>Instance naming</label>
+              <div class="ctrl"><input type="text" value="{base}-{n}.{ext}"></div>
             </div>
           </div>
         </div>
@@ -370,6 +443,14 @@
 
   <!-- LEGEND -->
   <div class="legend">
+<b>⚠️ THIS IS A DUMMY MOCKUP — NOT THE REAL APP.</b>
+HTML/CSS sketch only. The real implementation MUST use stock macOS/SwiftUI elements ONLY:
+NavigationSplitView · Table/TableColumn · Form · Picker · Toggle · Stepper · Slider ·
+ColorPicker · DisclosureGroup · contextMenu · Commands · NSWorkspace · QLPreviewPanel ·
+Foundation.UndoManager · FileManager.trashItem · ImageIO. No web tech, no custom chrome.
+The HTML below is purely to communicate layout and interaction — pixel rendering will
+differ because real macOS controls override every styling choice.
+
 <b># bgbgone-app v0.3 — what changed vs v0.2.0</b>
 
 <mark>T1</mark>  Source Folder column between Name and Status (sortable, tooltip = full path; loose files: em-dash)

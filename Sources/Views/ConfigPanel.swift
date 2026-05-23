@@ -1,261 +1,155 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
-/// Two-column grid panel: Save to / Name as / Background / Format.
+/// Finder/System-Settings-style `Form` panel. Stock `Picker` / `TextField` / `ColorPicker`
+/// / `.fileImporter`. Lives in the inspector column on the right side of the window.
 struct ConfigPanel: View {
     @Bindable var viewModel: AppViewModel
+    @State private var folderImporterShown = false
+    @State private var imageImporterShown = false
+    @State private var colourBinding: Color = .white
 
     var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 11) {
-            GridRow {
-                Label("Save to")
-                FolderPicker(directory: $viewModel.config.outDirectory)
-                    .gridCellAnchor(.leading)
-            }
-
-            GridRow {
-                Label("Name as")
-                NamePatternField(pattern: $viewModel.config.namePattern)
-                    .gridCellAnchor(.leading)
-            }
-
-            GridRow {
-                Label("Background")
-                BackgroundChips(background: $viewModel.config.background)
-                    .gridCellAnchor(.leading)
-            }
-
-            GridRow {
-                Label("Format")
-                FormatChips(format: $viewModel.config.format)
-                    .gridCellAnchor(.leading)
-            }
-        }
-        .padding(.horizontal, 28)
-        .padding(.top, 20)
-        .padding(.bottom, 22)
-    }
-}
-
-private struct Label: View {
-    let text: String
-    init(_ text: String) { self.text = text }
-    var body: some View {
-        Text(text)
-            .font(DesignFont.label)
-            .foregroundStyle(DesignColor.fgMute)
-            .frame(width: 80, alignment: .leading)
-    }
-}
-
-private struct FolderPicker: View {
-    @Binding var directory: URL
-
-    var body: some View {
-        Button(action: choose) {
-            HStack(spacing: 8) {
-                Image(systemName: "folder")
-                    .foregroundStyle(DesignColor.fgFaint)
-                Text(directory.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
-                    .font(DesignFont.mono)
-                    .foregroundStyle(DesignColor.fg)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func choose() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.directoryURL = directory
-        if panel.runModal() == .OK, let url = panel.url { directory = url }
-    }
-}
-
-private struct NamePatternField: View {
-    @Binding var pattern: String
-
-    var body: some View {
-        HStack(spacing: 8) {
-            TextField("", text: $pattern)
-                .textFieldStyle(.plain)
-                .font(DesignFont.mono)
-                .foregroundStyle(DesignColor.fg)
-                .frame(maxWidth: 240)
-
-            HStack(spacing: 4) {
-                ForEach(["{name}", "{ext}", "{n:02}"], id: \.self) { token in
-                    Button(token) { pattern += token }
-                        .buttonStyle(TokenChipStyle())
+        Form {
+            Section("Save to") {
+                HStack {
+                    Label(displayPath, systemImage: "folder")
+                        .labelStyle(.titleAndIcon)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button("Choose…") { folderImporterShown = true }
                 }
             }
+
+            Section("Name as") {
+                TextField("Filename pattern", text: $viewModel.config.namePattern)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.body.monospaced())
+                HStack(spacing: 6) {
+                    ForEach(["{name}", "{ext}", "{n:02}"], id: \.self) { token in
+                        Button(token) { viewModel.config.namePattern += token }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                }
+                .padding(.top, 4)
+            }
+
+            Section("Background") {
+                Picker("", selection: backgroundCase) {
+                    Text("Transparent").tag(BackgroundCase.transparent)
+                    Text("Color").tag(BackgroundCase.color)
+                    Text("Image").tag(BackgroundCase.image)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                if case .color = viewModel.config.background {
+                    ColorPicker("Colour", selection: $colourBinding, supportsOpacity: false)
+                        .onChange(of: colourBinding) { _, new in
+                            viewModel.config.background = .color(hex: new.toHex() ?? "#ffffff")
+                        }
+                }
+                if case .image(let url) = viewModel.config.background {
+                    HStack {
+                        Label(url.lastPathComponent, systemImage: "photo")
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer()
+                        Button("Change…") { imageImporterShown = true }
+                    }
+                }
+            }
+
+            Section("Format") {
+                Picker("", selection: $viewModel.config.format) {
+                    ForEach(OutputFormat.allCases, id: \.self) { format in
+                        Text(format.displayLabel).tag(format)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
+        }
+        .formStyle(.grouped)
+        .fileImporter(
+            isPresented: $folderImporterShown,
+            allowedContentTypes: [.folder],
+            onCompletion: handleFolderPick
+        )
+        .fileImporter(
+            isPresented: $imageImporterShown,
+            allowedContentTypes: [.png, .jpeg, .heic, .tiff],
+            onCompletion: handleImagePick
+        )
+        .onAppear(perform: syncColourFromBackground)
+    }
+
+    private var displayPath: String {
+        viewModel.config.outDirectory.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+    }
+
+    /// Bridge `BackgroundChoice` (associated values) ↔ `Picker` (needs a `Hashable` tag).
+    private var backgroundCase: Binding<BackgroundCase> {
+        Binding(
+            get: {
+                switch viewModel.config.background {
+                case .transparent: .transparent
+                case .color: .color
+                case .image: .image
+                }
+            },
+            set: { newCase in
+                switch newCase {
+                case .transparent:
+                    viewModel.config.background = .transparent
+                case .color:
+                    let hex = colourBinding.toHex() ?? "#ffffff"
+                    viewModel.config.background = .color(hex: hex)
+                case .image:
+                    // We can't pick a URL synchronously from the segmented control —
+                    // open the importer; until the user picks something, stay on the
+                    // last image URL we had, or fall back to transparent.
+                    if case .image = viewModel.config.background {
+                        imageImporterShown = true
+                    } else {
+                        imageImporterShown = true
+                    }
+                }
+            }
+        )
+    }
+
+    private func handleFolderPick(_ result: Result<URL, Error>) {
+        if case .success(let url) = result {
+            viewModel.config.outDirectory = url
+        }
+    }
+
+    private func handleImagePick(_ result: Result<URL, Error>) {
+        if case .success(let url) = result {
+            viewModel.config.background = .image(url)
+        }
+    }
+
+    private func syncColourFromBackground() {
+        if case .color(let hex) = viewModel.config.background {
+            colourBinding = Color(hex: hex)
         }
     }
 }
 
-private struct TokenChipStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 11, design: .monospaced))
-            .foregroundStyle(DesignColor.fgMute)
-            .padding(.horizontal, 7).padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(configuration.isPressed
-                          ? Color(white: 0.88)
-                          : DesignColor.bgSoft)
-            )
-    }
-}
+private enum BackgroundCase: Hashable { case transparent, color, image }
 
-private struct BackgroundChips: View {
-    @Binding var background: BackgroundChoice
-
-    var body: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 2) {
-                RadioChip(label: "Transparent",
-                          isActive: isTransparent,
-                          leading: { CheckerSwatch() }) {
-                    background = .transparent
-                }
-                RadioChip(label: "Color",
-                          isActive: isColor,
-                          leading: { ColorSwatchPreview(color: colorValue) }) {
-                    if !isColor { background = .color(hex: colorValue) }
-                }
-                RadioChip(label: "Image…",
-                          isActive: isImage,
-                          leading: { EmptyView() }) {
-                    chooseImage()
-                }
-            }
-            if isColor {
-                ColorPickerInline(hex: Binding(
-                    get: { colorValue },
-                    set: { background = .color(hex: $0) }
-                ))
-            }
+/// `Color` → `#rrggbb` for storage in `Config.background.color`.
+private extension Color {
+    func toHex() -> String? {
+        let ns = NSColor(self).usingColorSpace(.sRGB)
+        guard let r = ns?.redComponent, let g = ns?.greenComponent, let b = ns?.blueComponent else {
+            return nil
         }
-    }
-
-    private var isTransparent: Bool {
-        if case .transparent = background { return true }; return false
-    }
-    private var isColor: Bool {
-        if case .color = background { return true }; return false
-    }
-    private var isImage: Bool {
-        if case .image = background { return true }; return false
-    }
-    private var colorValue: String {
-        if case .color(let hex) = background { return hex }
-        return "#ffffff"
-    }
-
-    private func chooseImage() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.png, .jpeg, .heic, .tiff]
-        if panel.runModal() == .OK, let url = panel.url { background = .image(url) }
-    }
-}
-
-private struct RadioChip<Leading: View>: View {
-    let label: String
-    let isActive: Bool
-    @ViewBuilder let leading: () -> Leading
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                leading()
-                Text(label).font(.system(size: 12.5, weight: isActive ? .semibold : .medium))
-            }
-            .foregroundStyle(isActive ? DesignColor.accentPress : DesignColor.fgMute)
-            .padding(.horizontal, 11)
-            .frame(height: 28)
-            .background(
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(isActive ? DesignColor.bgSelected : .clear)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct CheckerSwatch: View {
-    var body: some View {
-        Canvas { ctx, size in
-            let t: CGFloat = 3
-            for r in 0...3 {
-                for c in 0...3 {
-                    let isLight = (r + c).isMultiple(of: 2)
-                    ctx.fill(
-                        Path(CGRect(x: CGFloat(c) * t, y: CGFloat(r) * t, width: t, height: t)),
-                        with: .color(isLight ? .white : Color(white: 0.75))
-                    )
-                }
-            }
-        }
-        .frame(width: 12, height: 12)
-        .clipShape(RoundedRectangle(cornerRadius: 3))
-        .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Color.black.opacity(0.1)))
-    }
-}
-
-private struct ColorSwatchPreview: View {
-    let color: String
-    var body: some View {
-        RoundedRectangle(cornerRadius: 3)
-            .fill(Color(hex: color))
-            .frame(width: 12, height: 12)
-            .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Color.black.opacity(0.1)))
-    }
-}
-
-private struct ColorPickerInline: View {
-    @Binding var hex: String
-
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(Config.colorPresets, id: \.self) { preset in
-                Button(action: { hex = preset }) {
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(Color(hex: preset))
-                        .frame(width: 22, height: 22)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 5)
-                                .strokeBorder(hex == preset ? DesignColor.accent : DesignColor.border,
-                                              lineWidth: hex == preset ? 2 : 1)
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-            TextField("", text: $hex)
-                .textFieldStyle(.plain)
-                .font(.system(size: 12, design: .monospaced))
-                .frame(width: 100, height: 26)
-                .padding(.horizontal, 8)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 5))
-                .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(DesignColor.border))
-        }
-    }
-}
-
-private struct FormatChips: View {
-    @Binding var format: OutputFormat
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(OutputFormat.allCases, id: \.self) { f in
-                RadioChip(label: f.displayLabel, isActive: format == f, leading: { EmptyView() }) {
-                    format = f
-                }
-            }
-        }
+        return String(format: "#%02x%02x%02x", Int(r * 255), Int(g * 255), Int(b * 255))
     }
 }

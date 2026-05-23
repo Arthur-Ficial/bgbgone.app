@@ -19,7 +19,7 @@ struct AppViewModelTests {
         func run(arguments: [String]) async throws -> RunResult {
             let input = URL(fileURLWithPath: arguments.first ?? "/x")
             let out = URL(fileURLWithPath: arguments.dropFirst().drop(while: { $0 != "-o" }).dropFirst().first ?? "/out.png")
-            return RunResult(input: input, output: out, algo: "vn-mask", format: "png", width: 1, height: 1)
+            return RunResult(input: input, output: out, algo: "vn-mask", format: "png", width: 1, height: 1, durationMillis: 42)
         }
     }
 
@@ -82,6 +82,39 @@ struct AppViewModelTests {
         await vm.handleDrop(urls: [])
         if case .summary = vm.dropMachine.phase { /* good */ } else {
             Issue.record("expected .summary after empty drop, got \(vm.dropMachine.phase)")
+        }
+    }
+
+    @Test func processedFilesCarryRealDurationFromRunner() async {
+        let vm = Self.makeVM()
+        await vm.handleDrop(urls: [Self.scanTree])
+        await vm.processAll()
+
+        for file in vm.files {
+            guard case .done(let ms) = file.state else {
+                Issue.record("file \(file.name) not done")
+                continue
+            }
+            #expect(ms == 42, "expected the InstantRunner's stamped durationMillis to propagate, got \(ms)")
+        }
+    }
+
+    @Test func processAllIsNoOpWhenBinaryMissing() async {
+        let vm = AppViewModel(
+            runner: nil,
+            scanner: FolderScanner(),
+            metaReader: StubMetaReader(),
+            bootState: .missingBinary(searched: ["/nowhere"])
+        )
+        await vm.handleDrop(urls: [Self.scanTree])
+        await vm.processAll()
+
+        // Files are present but no processing happened — no .done, no .processing.
+        for file in vm.files {
+            switch file.state {
+            case .raw: continue
+            default: Issue.record("file \(file.name) moved to \(file.state) — runner is nil, should be no-op")
+            }
         }
     }
 }

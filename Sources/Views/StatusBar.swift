@@ -6,32 +6,32 @@ struct StatusBar: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            Text("on-device · Vision")
             if viewModel.files.count > 0 {
-                Text("·").foregroundStyle(DesignColor.fgGhost)
                 HStack(spacing: 4) {
                     Text("\(doneCount)").bold().monospacedDigit()
                     Text("of \(viewModel.files.count) done")
                     if errorCount > 0 {
                         Text(",")
-                        Text("\(errorCount)").bold().foregroundStyle(DesignColor.red)
+                        Text("\(errorCount)").bold().foregroundStyle(.red)
                         Text("failed")
                     }
                 }
+            } else {
+                Text("No images yet")
             }
             Spacer()
             Text("→ \(samplePreviewPath)")
-                .font(DesignFont.monoSmall)
+                .font(.caption.monospaced())
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
-        .font(.system(size: 11.5))
-        .foregroundStyle(DesignColor.fgFaint)
+        .font(.footnote)
+        .foregroundStyle(.secondary)
         .padding(.horizontal, 28)
         .frame(height: 28)
-        .background(DesignColor.bgPane)
+        .background(.regularMaterial)
         .overlay(alignment: .top) {
-            Rectangle().fill(DesignColor.borderSoft).frame(height: 1)
+            Rectangle().fill(.separator).frame(height: 1)
         }
     }
 

@@ -25,7 +25,10 @@ final class AppViewModel {
 
     let dropMachine: DropMachine
 
-    private let runner: any BgBgOneRunning
+    /// `nil` when the binary couldn't be located. The UI shows `MissingBinaryView` and
+    /// disables actions in that case; `processAll()` early-returns. We do not ship a
+    /// stub runner — a stub is the "fake fallback" the no-fake-UI charter forbids.
+    private let runner: (any BgBgOneRunning)?
     private let scanner: any FolderScanning
     private let metaReader: any ImageMetaReading
     private let logger = Logger(subsystem: BuildInfo.osLogSubsystem, category: "app")
@@ -37,19 +40,17 @@ final class AppViewModel {
     convenience init() {
         let locator = BinaryLocator()
         let bootState: BootState
-        let runner: any BgBgOneRunning
+        let runner: (any BgBgOneRunning)?
         do {
             let binary = try locator.locate()
             bootState = .ready(binary: binary)
             runner = BgBgOneRunner(binary: binary)
         } catch BinaryLocator.LocatorError.notFound(let searched) {
             bootState = .missingBinary(searched: searched)
-            // Provide a stub runner so the rest of the type compiles; nothing should
-            // ever call it while bootState != .ready.
-            runner = StubMissingRunner()
+            runner = nil
         } catch {
             bootState = .missingBinary(searched: ["unknown: \(error)"])
-            runner = StubMissingRunner()
+            runner = nil
         }
         self.init(
             runner: runner,
@@ -62,7 +63,7 @@ final class AppViewModel {
     /// Test-friendly initialiser. Tests pass mocks for all three services so the
     /// integration test runs without spawning anything or touching disk.
     init(
-        runner: any BgBgOneRunning,
+        runner: (any BgBgOneRunning)?,
         scanner: any FolderScanning,
         metaReader: any ImageMetaReading,
         bootState: BootState
@@ -174,7 +175,13 @@ final class AppViewModel {
     }
 
     /// "Remove background from N" → enqueue every `.raw` / `.error` file.
+    ///
+    /// No-op when the binary is missing: the UI shows `MissingBinaryView` and disables
+    /// the toolbar action, so this is the explicit assertion of that invariant rather
+    /// than a fallback.
     func processAll() async {
+        guard let runner else { return }
+
         for idx in files.indices where files[idx].state.isRequeueable {
             files[idx].state = .queued
         }
@@ -216,8 +223,8 @@ final class AppViewModel {
     private func markFinished(id: UUID, result: Result<RunResult, Error>) {
         guard let idx = files.firstIndex(where: { $0.id == id }) else { return }
         switch result {
-        case .success:
-            files[idx].state = .done(milliseconds: 0) // ms not tracked in v0.1 — placeholder
+        case .success(let outcome):
+            files[idx].state = .done(milliseconds: outcome.durationMillis)
         case .failure(let err):
             files[idx].state = .error(message: "\(err)")
             logger.error("file \(id.uuidString, privacy: .public) failed: \(String(describing: err), privacy: .public)")
@@ -236,10 +243,3 @@ final class AppViewModel {
     }
 }
 
-/// Stand-in runner installed when `BinaryLocator` fails. Always throws — the UI must
-/// branch on `bootState != .ready` and never call into the runner anyway.
-private struct StubMissingRunner: BgBgOneRunning {
-    func run(arguments: [String]) async throws -> RunResult {
-        throw RunnerError.binaryNotExecutable(URL(fileURLWithPath: "/dev/null"))
-    }
-}

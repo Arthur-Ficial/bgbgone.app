@@ -1,307 +1,174 @@
 import SwiftUI
 
-/// The scrolling file list with batch grouping.
+/// Finder-style file `Table`: sortable columns, multi-select, real selection model, real
+/// context menu. Drives `AppViewModel.selectedId` (single) for the inspector preview.
 struct FileListView: View {
     @Bindable var viewModel: AppViewModel
     let onDismissSummary: () -> Void
 
+    @State private var sortOrder: [KeyPathComparator<ImageFile>] = [
+        KeyPathComparator(\ImageFile.name, order: .forward),
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    if viewModel.files.isEmpty {
-                        emptyState
-                    } else {
-                        ForEach(rowDescriptors, id: \.id) { desc in
-                            switch desc.kind {
-                            case .batchHeader(let batch):
-                                BatchHeaderRow(batch: batch) {
-                                    if let idx = viewModel.batches.firstIndex(where: { $0.id == batch.id }) {
-                                        viewModel.batches[idx].isCollapsed.toggle()
-                                    }
-                                }
-                            case .file(let file):
-                                FileRow(
-                                    file: file,
-                                    isSelected: viewModel.selectedId == file.id,
-                                    onTap: { viewModel.selectedId = file.id }
-                                )
-                            }
-                        }
-                    }
+        Table(sortedFiles, selection: tableSelection, sortOrder: $sortOrder) {
+            TableColumn("Name", value: \.name) { file in
+                HStack(spacing: 8) {
+                    Image(systemName: "photo")
+                        .foregroundStyle(.secondary)
+                    Text(file.name)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
+            }
+            .width(min: 180, ideal: 280)
+
+            TableColumn("Status") { file in
+                StatusPill(state: file.state)
+            }
+            .width(min: 110, max: 140)
+
+            TableColumn("Size", value: \.bytesSortKey) { file in
+                Text(sizeText(file))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            .width(min: 90, ideal: 100, max: 130)
+
+            TableColumn("Dimensions", value: \.pixelArea) { file in
+                Text(dimsText(file))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            .width(min: 100, ideal: 110, max: 140)
+
+            TableColumn("Modified", value: \.modifiedAt) { file in
+                Text(file.modifiedAt, format: .dateTime.day().month().hour().minute())
+                    .foregroundStyle(.secondary)
+            }
+            .width(min: 120, ideal: 150)
+        }
+        .contextMenu(forSelectionType: ImageFile.ID.self) { ids in
+            if ids.isEmpty {
+                Button("Add files…", action: { /* handled via toolbar */ }).disabled(true)
+            } else {
+                Button(ids.count == 1 ? "Show in Finder" : "Show all in Finder", systemImage: "folder") {
+                    let urls = viewModel.files.filter { ids.contains($0.id) }.map(\.url)
+                    NSWorkspace.shared.activateFileViewerSelecting(urls)
+                }
+                Divider()
+                Button("Remove from Queue", systemImage: "trash", role: .destructive) {
+                    viewModel.files.removeAll { ids.contains($0.id) }
+                }
+            }
+        } primaryAction: { ids in
+            if let first = ids.first {
+                viewModel.selectedId = first
             }
         }
-        .background(DesignColor.bg)
-    }
-
-    @ViewBuilder private var header: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 4) {
-                Text("\(viewModel.files.count)").bold().foregroundStyle(DesignColor.fg)
-                Text("images").foregroundStyle(DesignColor.fgMute)
-            }
-            .font(DesignFont.uiSmall)
-            if !viewModel.batches.isEmpty {
-                Text("·").foregroundStyle(DesignColor.fgGhost)
-                HStack(spacing: 4) {
-                    Text("\(viewModel.batches.count)").bold().foregroundStyle(DesignColor.fg)
-                    Text("folders").foregroundStyle(DesignColor.fgMute)
-                }
-                .font(DesignFont.uiSmall)
-            }
-            Spacer()
+        .safeAreaInset(edge: .top, spacing: 0) {
             if case .summary(let summary) = viewModel.dropMachine.phase {
                 DropSummaryChip(summary: summary, onDismiss: onDismissSummary)
+                    .padding(8)
+                    .frame(maxWidth: .infinity)
+                    .background(.regularMaterial)
             }
         }
-        .padding(.horizontal, 28)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
-        .frame(minHeight: 38)
-        .overlay(alignment: .top) {
-            Rectangle().fill(DesignColor.borderSoft).frame(height: 1)
+        .overlay {
+            if viewModel.visibleFiles.isEmpty { emptyState }
         }
     }
 
     @ViewBuilder private var emptyState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             Image(systemName: "tray.and.arrow.down")
-                .font(.system(size: 48, weight: .ultraLight))
-                .foregroundStyle(DesignColor.fgGhost)
+                .font(.system(size: 44, weight: .ultraLight))
+                .foregroundStyle(.tertiary)
             Text("Drop a folder or images here")
-                .font(DesignFont.display)
-                .foregroundStyle(DesignColor.fg)
+                .font(.headline)
+                .foregroundStyle(.primary)
             Text("or use Add files…")
-                .font(DesignFont.monoSmall)
-                .foregroundStyle(DesignColor.fgFaint)
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 36)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.background)
     }
 
-    /// One render row per visible item. Pre-computed so the SwiftUI ForEach gets a
-    /// stable `id` list and doesn't redraw on every batch update.
-    private var rowDescriptors: [RowDescriptor] {
-        var seenBatch: Set<UUID> = []
-        var rows: [RowDescriptor] = []
-        for file in viewModel.files {
-            if let bid = file.batchId,
-               let batch = viewModel.batches.first(where: { $0.id == bid }) {
-                if !seenBatch.contains(bid) {
-                    rows.append(RowDescriptor(id: "h-\(bid.uuidString)", kind: .batchHeader(batch)))
-                    seenBatch.insert(bid)
-                }
-                if batch.isCollapsed { continue }
+    private var sortedFiles: [ImageFile] {
+        viewModel.visibleFiles.sorted(using: sortOrder)
+    }
+
+    private var tableSelection: Binding<Set<ImageFile.ID>> {
+        Binding(
+            get: {
+                if let id = viewModel.selectedId { return [id] }
+                return []
+            },
+            set: { newSet in
+                viewModel.selectedId = newSet.first
             }
-            rows.append(RowDescriptor(id: "f-\(file.id.uuidString)", kind: .file(file)))
-        }
-        return rows
-    }
-
-    private struct RowDescriptor {
-        let id: String
-        let kind: Kind
-        enum Kind {
-            case batchHeader(Batch)
-            case file(ImageFile)
-        }
-    }
-}
-
-private struct BatchHeaderRow: View {
-    let batch: Batch
-    let onToggle: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Button(action: onToggle) {
-                HStack(spacing: 7) {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .semibold))
-                        .rotationEffect(.degrees(batch.isCollapsed ? -90 : 0))
-                        .foregroundStyle(DesignColor.fgMute)
-                    Image(systemName: "folder")
-                        .font(.system(size: 12))
-                        .foregroundStyle(DesignColor.fgMute)
-                    Text(batch.name)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(DesignColor.fg)
-                }
-            }
-            .buttonStyle(.plain)
-
-            Spacer()
-
-            HStack(spacing: 0) {
-                Text("\(batch.imageCount) \(batch.imageCount == 1 ? "image" : "images")")
-                if batch.skippedCount > 0 {
-                    Text(" · ").foregroundStyle(DesignColor.fgGhost)
-                    Text("\(batch.skippedCount) skipped").foregroundStyle(DesignColor.amber)
-                }
-            }
-            .font(.system(size: 11.5, design: .monospaced))
-            .foregroundStyle(DesignColor.fgFaint)
-
-            Text(relativeAddedAt(batch.addedAt))
-                .font(.system(size: 11.5, design: .monospaced))
-                .foregroundStyle(DesignColor.fgGhost)
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, 12)
-        .padding(.bottom, 6)
-        .overlay(alignment: .top) {
-            Rectangle().fill(DesignColor.borderSoft).frame(height: 1)
-        }
-    }
-
-    private func relativeAddedAt(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: date, relativeTo: .now)
-    }
-}
-
-private struct FileRow: View {
-    let file: ImageFile
-    let isSelected: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 14) {
-                Thumbnail(state: file.state)
-                    .frame(width: 36, height: 36)
-                HStack(spacing: 0) {
-                    if !file.relativePath.isEmpty {
-                        Text(file.relativePath)
-                            .font(.system(size: 11.5, design: .monospaced))
-                            .foregroundStyle(DesignColor.fgFaint)
-                    }
-                    Text(file.name)
-                        .font(.system(size: 13))
-                        .foregroundStyle(DesignColor.fg)
-                }
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                Text(dimsLine)
-                    .font(DesignFont.mono)
-                    .foregroundStyle(DesignColor.fgFaint)
-                    .frame(minWidth: 80, alignment: .trailing)
-
-                StatusPill(state: file.state)
-                    .frame(minWidth: 96, alignment: .trailing)
-
-                Text(relativeModified)
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(DesignColor.fgFaint)
-                    .frame(minWidth: 96, alignment: .trailing)
-            }
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? DesignColor.bgSelected : .clear)
         )
-        .padding(.leading, file.batchId != nil ? 18 : 0)
-        .overlay(alignment: .leading) {
-            if file.batchId != nil {
-                Rectangle()
-                    .fill(DesignColor.borderSoft)
-                    .frame(width: 1)
-                    .padding(.leading, 18)
-            }
-        }
     }
 
-    private var dimsLine: String {
-        guard let w = file.width, let h = file.height else { return "" }
+    private func sizeText(_ file: ImageFile) -> String {
+        guard let bytes = file.bytes else { return "—" }
+        return SelectedMeta.humanBytes(bytes)
+    }
+
+    private func dimsText(_ file: ImageFile) -> String {
+        guard let w = file.width, let h = file.height else { return "—" }
         return "\(w) × \(h)"
     }
-
-    private var relativeModified: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: file.modifiedAt, relativeTo: .now)
-    }
 }
 
-private struct Thumbnail: View {
-    let state: ProcessingState
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 5)
-                .fill(DesignColor.bgSoft)
-            Image(systemName: "photo")
-                .font(.system(size: 16, weight: .light))
-                .foregroundStyle(tint)
-        }
-    }
-
-    private var tint: Color {
-        switch state {
-        case .raw: DesignColor.fgGhost
-        case .queued: DesignColor.accent
-        case .processing: DesignColor.amber
-        case .done: DesignColor.green
-        case .error: DesignColor.red
-        }
-    }
-}
-
+/// Inline green chip shown when a drop just finished.
 struct DropSummaryChip: View {
     let summary: DropSummary
     let onDismiss: () -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
-            Circle()
-                .fill(DesignColor.green)
-                .frame(width: 6, height: 6)
-                .padding(.trailing, 8)
-            HStack(spacing: 4) {
-                Text("Added")
-                Text("\(summary.added)").bold().monospacedDigit()
-                Text(summary.added == 1 ? "image" : "images")
-                if !summary.folderName.isEmpty {
-                    Text("from")
-                    Text(summary.folderName).italic()
-                }
-            }
-            .font(.system(size: 12))
-            .foregroundStyle(DesignColor.fg)
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            Text(addedLine)
+                .font(.callout)
+                .foregroundStyle(.primary)
 
             if summary.skipped > 0 {
-                Text("  ·  \(summary.skipped) skipped")
-                    .font(.system(size: 12))
-                    .foregroundStyle(DesignColor.fgMute)
+                Text("· \(summary.skipped) skipped")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
+
+            Spacer()
+
             Button(action: onDismiss) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .medium))
-                    .padding(4)
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.tertiary)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(DesignColor.fgFaint)
-            .padding(.leading, 8)
         }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 5)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(DesignColor.green.opacity(0.08))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(DesignColor.green.opacity(0.22))
-        )
     }
+
+    private var addedLine: AttributedString {
+        let n = summary.added
+        let unit = n == 1 ? "image" : "images"
+        var s = AttributedString("Added \(n) \(unit)")
+        if !summary.folderName.isEmpty {
+            let from = AttributedString(" from ")
+            s.append(from)
+            var name = AttributedString(summary.folderName)
+            name.font = .callout.italic()
+            s.append(name)
+        }
+        return s
+    }
+}
+
+/// `KeyPathComparator` needs concrete `Comparable` properties. `Optional<Int>` doesn't
+/// satisfy that on its own, so we expose stable sort keys.
+private extension ImageFile {
+    var bytesSortKey: Int { bytes ?? -1 }
+    var pixelArea: Int { (width ?? 0) * (height ?? 0) }
 }

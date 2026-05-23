@@ -23,6 +23,17 @@ final class AppViewModel {
     var selectedId: ImageFile.ID?
     var config: Config = Config(outDirectory: Config.defaultOutDirectory)
 
+    /// Finder-style sidebar selection. `.all` shows every file; `.batch(id)` filters.
+    var sidebarSelection: SidebarItem? = .all
+
+    /// Files filtered by the current sidebar selection.
+    var visibleFiles: [ImageFile] {
+        switch sidebarSelection {
+        case .none, .some(.all): files
+        case .some(.batch(let id)): files.filter { $0.batchId == id }
+        }
+    }
+
     let dropMachine: DropMachine
 
     /// `nil` when the binary couldn't be located. The UI shows `MissingBinaryView` and

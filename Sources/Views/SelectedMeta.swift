@@ -1,29 +1,29 @@
 import SwiftUI
 
-/// Strip below DualPreview: filename + dims/bytes/ms + status pill.
+/// Strip below DualPreview in the inspector: filename + dims/bytes/ms + status pill.
+/// System fonts and semantic colours throughout.
 struct SelectedMeta: View {
     let file: ImageFile?
 
     var body: some View {
         if let file {
-            HStack(alignment: .firstTextBaseline, spacing: 14) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(file.name)
-                    .font(DesignFont.displayName)
-                    .foregroundStyle(DesignColor.fg)
-                    .tracking(-0.17)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                     .truncationMode(.middle)
 
                 Text(metaLine(for: file))
-                    .font(DesignFont.mono)
-                    .foregroundStyle(DesignColor.fgFaint)
+                    .font(.callout.monospaced())
+                    .foregroundStyle(.secondary)
 
                 Spacer()
 
                 StatusPill(state: file.state)
             }
-            .padding(.horizontal, 28)
-            .padding(.top, 18)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
         }
     }
 
@@ -48,24 +48,28 @@ struct SelectedMeta: View {
     }
 }
 
+/// Status pill — used in the file Table and the inspector strip. Stock SF Symbols dot
+/// + system semantic colours that follow light/dark/colour-blind preferences.
 struct StatusPill: View {
     let state: ProcessingState
     @State private var pulse = false
 
     var body: some View {
         HStack(spacing: 6) {
-            Circle()
-                .fill(dotColor)
-                .frame(width: 7, height: 7)
-                .opacity(state.pillClass == "processing" && pulse ? 0.35 : 1)
-                .animation(state.pillClass == "processing"
-                           ? .easeInOut(duration: 0.7).repeatForever() : .default,
-                           value: pulse)
+            Image(systemName: "circle.fill")
+                .font(.system(size: 7))
+                .foregroundStyle(dotColor)
+                .opacity(isProcessing && pulse ? 0.35 : 1.0)
+                .animation(isProcessing ? .easeInOut(duration: 0.7).repeatForever() : .default, value: pulse)
             Text(label)
-                .font(.system(size: 12, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundStyle(textColor)
         }
-        .onAppear { if state.pillClass == "processing" { pulse = true } }
+        .onAppear { if isProcessing { pulse = true } }
+    }
+
+    private var isProcessing: Bool {
+        if case .processing = state { return true } else { return false }
     }
 
     private var label: String {
@@ -80,21 +84,21 @@ struct StatusPill: View {
 
     private var dotColor: Color {
         switch state {
-        case .raw: DesignColor.fgGhost
-        case .queued: DesignColor.accent
-        case .processing: DesignColor.amber
-        case .done: DesignColor.green
-        case .error: DesignColor.red
+        case .raw: .secondary
+        case .queued: .accentColor
+        case .processing: .orange
+        case .done: .green
+        case .error: .red
         }
     }
 
     private var textColor: Color {
         switch state {
-        case .raw: DesignColor.fgMute
-        case .queued: DesignColor.accent
-        case .processing: DesignColor.amber
-        case .done: DesignColor.green
-        case .error: DesignColor.red
+        case .raw: .secondary
+        case .queued: .primary
+        case .processing: .orange
+        case .done: .green
+        case .error: .red
         }
     }
 }

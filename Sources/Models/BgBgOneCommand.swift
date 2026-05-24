@@ -12,6 +12,25 @@ struct BgBgOneCommand: Sendable, Hashable {
     let output: URL
     let background: BackgroundChoice
     let format: OutputFormat
+    /// T14 — composed `--filter` chain string. Empty / nil = no `--filter` arg
+    /// emitted (CLI default behavior applies). The Settings panel's GUI controls
+    /// compose this via `FilterChain.dslString`; the free-form editor binds to
+    /// the resulting string directly.
+    var filterChain: String?
+
+    init(
+        input: URL,
+        output: URL,
+        background: BackgroundChoice,
+        format: OutputFormat,
+        filterChain: String? = nil
+    ) {
+        self.input = input
+        self.output = output
+        self.background = background
+        self.format = format
+        self.filterChain = filterChain
+    }
 
     enum CommandError: Error, Equatable {
         case relativeInput
@@ -39,6 +58,9 @@ struct BgBgOneCommand: Sendable, Hashable {
         }
 
         args += ["--to", format.cliValue]
+        if let filterChain, !filterChain.isEmpty {
+            args += ["--filter", filterChain]
+        }
         args += ["--json", "--quiet"]
         return args
     }

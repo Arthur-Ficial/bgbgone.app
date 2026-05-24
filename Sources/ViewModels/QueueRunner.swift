@@ -35,41 +35,39 @@ struct QueueRunner: Sendable {
     /// One bad item never stops the others — errors are surfaced via `onResult`.
     func process(
         _ items: [WorkItem],
-        onStart: @Sendable @escaping (UUID) -> Void,
-        onResult: @Sendable @escaping (UUID, Result<RunResult, Error>) -> Void
+        onStart: @Sendable @escaping (UUID) async -> Void,
+        onResult: @Sendable @escaping (UUID, Result<RunResult, Error>) async -> Void
     ) async {
         await withTaskGroup(of: Void.self) { group in
             var inFlight = 0
             var iter = items.makeIterator()
             let runner = self.runner
 
-            // Prime up to maxConcurrent tasks.
             while inFlight < maxConcurrent, let item = iter.next() {
                 inFlight += 1
                 group.addTask {
-                    onStart(item.id)
+                    await onStart(item.id)
                     let result: Result<RunResult, Error>
                     do {
                         result = .success(try await runner.run(arguments: item.arguments))
                     } catch {
                         result = .failure(error)
                     }
-                    onResult(item.id, result)
+                    await onResult(item.id, result)
                 }
             }
 
-            // Refill as each task completes.
             for await _ in group {
                 if let item = iter.next() {
                     group.addTask {
-                        onStart(item.id)
+                        await onStart(item.id)
                         let result: Result<RunResult, Error>
                         do {
                             result = .success(try await runner.run(arguments: item.arguments))
                         } catch {
                             result = .failure(error)
                         }
-                        onResult(item.id, result)
+                        await onResult(item.id, result)
                     }
                 }
             }

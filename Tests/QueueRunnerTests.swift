@@ -96,16 +96,12 @@ struct QueueRunnerTests {
             items,
             onStart: { _ in },
             onResult: { _, result in
-                Task {
-                    switch result {
-                    case .success: await counter.recordSuccess()
-                    case .failure: await counter.recordFailure()
-                    }
+                switch result {
+                case .success: await counter.recordSuccess()
+                case .failure: await counter.recordFailure()
                 }
             }
         )
-        // Drain the recording tasks.
-        try? await Task.sleep(for: .milliseconds(100))
         let successes = await counter.successes
         let failures = await counter.failures
         // 4 callbacks total. One failure (the throwAfter==2 one), three successes.

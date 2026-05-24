@@ -194,6 +194,37 @@ struct NoFakeUITests {
         #expect(offenses.isEmpty, "Baked-in demo files are forbidden — Demo Mode downloads to ~/Library/Caches/:\n\(offenses.joined(separator: "\n"))")
     }
 
+    /// v0.3 power-user pass (Epic #33) — every visible label that the tickets specify
+    /// must appear verbatim in `Sources/`. If a renaming refactor happens, this catches
+    /// it: the ticket text is the SSOT for user-facing copy.
+    @Test func v03LiteralLabelsPresent() throws {
+        let required: [String] = [
+            "Run History",
+            "Source Folder",
+            "Open Source Folder",
+            "Open Output Folder",
+            "Process This Only",
+            "Undo Process",
+            "Redo Process",
+            "Select All Visible",
+            "Single Files",
+            "Mask refinement",
+            "Foreground transforms",
+            "Background filters",
+            "Advanced",
+            "Soften edges",
+        ]
+        var allText = ""
+        for (_, text) in try Self.codeOnlySourceTexts() {
+            allText += text + "\n"
+        }
+        var missing: [String] = []
+        for label in required where !allText.contains("\"\(label)") {
+            missing.append(label)
+        }
+        #expect(missing.isEmpty, "v0.3 labels missing from Sources/: \(missing.joined(separator: ", "))")
+    }
+
     /// Positive Finder-feel checks: confirm the stock SwiftUI primitives we promised
     /// to use are actually present in `Sources/Views/`.
     @Test func usesStockFinderShapedPrimitives() throws {

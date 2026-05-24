@@ -12,6 +12,27 @@ struct BgBgOneApp: App {
                 .frame(minWidth: 1100, idealWidth: 1180, minHeight: 720, idealHeight: 780)
         }
         .windowResizability(.contentMinSize)
+        .commands {
+            CommandGroup(replacing: .undoRedo) {
+                Button(viewModel.undoManager.canUndo ? viewModel.undoManager.undoLabel : "Undo") {
+                    Task { await viewModel.undoLastRun() }
+                }
+                .keyboardShortcut("z", modifiers: .command)
+                .disabled(!viewModel.undoManager.canUndo || viewModel.activeRun != nil)
+
+                Button(viewModel.undoManager.canRedo ? viewModel.undoManager.redoLabel : "Redo") {
+                    Task { await viewModel.redoLastRun() }
+                }
+                .keyboardShortcut("z", modifiers: [.command, .shift])
+                .disabled(!viewModel.undoManager.canRedo || viewModel.activeRun != nil)
+            }
+            CommandGroup(after: .pasteboard) {
+                Button("Select All Visible") { viewModel.selectAllVisible() }
+                    .keyboardShortcut("a", modifiers: .command)
+                Button("Deselect All") { viewModel.deselectAll() }
+                    .keyboardShortcut("a", modifiers: [.command, .shift])
+            }
+        }
     }
 }
 
@@ -52,15 +73,22 @@ struct ContentView: View {
         .animation(.easeOut(duration: 0.16), value: isDebugOpen)
     }
 
+    @AppStorage("bigPreviewHeight") private var bigPreviewHeight: Double = 230
+
     @ViewBuilder private var mainWindow: some View {
         NavigationSplitView {
             SourceSidebar(viewModel: viewModel)
         } detail: {
-            FileListView(
-                viewModel: viewModel,
-                onTryDemo: requestDemo,
-                onDismissSummary: { viewModel.dismissSummary() }
-            )
+            VStack(spacing: 0) {
+                BigDualPreview(viewModel: viewModel)
+                    .frame(height: bigPreviewHeight)
+                PreviewSplitter(height: $bigPreviewHeight)
+                FileListView(
+                    viewModel: viewModel,
+                    onTryDemo: requestDemo,
+                    onDismissSummary: { viewModel.dismissSummary() }
+                )
+            }
             .navigationTitle("bgbgone")
             .navigationSubtitle(subtitle)
             .sheet(isPresented: $demoAttributionShown) {
@@ -113,16 +141,29 @@ struct ContentView: View {
             }
             .animation(.easeOut(duration: 0.16), value: phaseIndex)
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: { Task { await viewModel.processAll() } }) {
-                        if viewModel.pendingCount > 0 {
-                            Label("Remove background from \(viewModel.pendingCount)", systemImage: "wand.and.stars")
-                        } else {
-                            Label("All done", systemImage: "checkmark.circle")
+                if !viewModel.selectedIds.isEmpty && viewModel.activeRun == nil {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            viewModel.startProcessing(ids: viewModel.selectedIds)
+                        } label: {
+                            Label("Process This Only (\(viewModel.selectedIds.count))", systemImage: "wand.and.stars.inverse")
                         }
+                        .help("Process only the selected files")
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        if viewModel.activeRun != nil {
+                            viewModel.stopActiveRun()
+                        } else {
+                            viewModel.startProcessing(ids: Set(viewModel.files.map(\.id)))
+                        }
+                    } label: {
+                        Label(viewModel.primaryActionLabel,
+                              systemImage: viewModel.activeRun != nil ? "stop.circle" : "wand.and.stars")
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(viewModel.pendingCount == 0)
+                    .disabled(viewModel.activeRun == nil && viewModel.pendingCount == 0)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: addFiles) {
@@ -180,7 +221,8 @@ struct ContentView: View {
     }
 }
 
-/// Right-side inspector: preview pair on top, selected-file metadata strip, config form.
+/// Right-side inspector: settings only (T12 moved the dual preview to the top of the
+/// middle column). Metadata strip + settings + per-item run history.
 private struct InspectorPane: View {
     @Bindable var viewModel: AppViewModel
 
@@ -188,24 +230,25 @@ private struct InspectorPane: View {
         ScrollView {
             VStack(spacing: 0) {
                 if let selected = viewModel.files.first(where: { $0.id == viewModel.selectedId }) {
-                    DualPreview(
-                        selected: selected,
-                        isEmpty: viewModel.files.isEmpty,
-                        config: viewModel.config,
-                        onPickFolder: {},
-                        onPickFiles: {}
-                    )
                     SelectedMeta(file: selected)
                     Divider()
-                } else if viewModel.files.isEmpty {
-                    InspectorEmpty()
-                        .frame(minHeight: 280)
-                } else {
-                    InspectorPickHint()
-                        .frame(minHeight: 280)
                 }
-
                 ConfigPanel(viewModel: viewModel)
+                Divider()
+                Form {
+                    Section("Filters (--filter chain)") {
+                        MaskFiltersForm(viewModel: viewModel)
+                        TransformsForm(viewModel: viewModel)
+                        BackgroundFiltersForm(viewModel: viewModel)
+                        AdvancedChainEditor(viewModel: viewModel)
+                    }
+                }
+                .formStyle(.grouped)
+                Divider()
+                RunHistoryView(
+                    file: viewModel.files.first(where: { $0.id == viewModel.selectedId }),
+                    store: viewModel.historyStore
+                )
             }
         }
     }

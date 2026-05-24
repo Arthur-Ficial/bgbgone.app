@@ -133,6 +133,28 @@ struct BgBgOneCommandTests {
         #expect(out == URL(fileURLWithPath: "/Users/me/cutouts/subject_07.png"))
     }
 
+    @Test func filterChainEmittedAsFilterArg() throws {
+        let cmd = BgBgOneCommand(
+            input: Self.input, output: Self.output,
+            background: .transparent, format: .png,
+            filterChain: "mask:feather=8;bg:grayscale"
+        )
+        let args = try cmd.arguments()
+        let idx = args.firstIndex(of: "--filter")
+        #expect(idx != nil)
+        if let idx { #expect(args[args.index(after: idx)] == "mask:feather=8;bg:grayscale") }
+    }
+
+    @Test func emptyFilterChainEmitsNoFilterArg() throws {
+        let cmd = BgBgOneCommand(
+            input: Self.input, output: Self.output,
+            background: .transparent, format: .png,
+            filterChain: ""
+        )
+        let args = try cmd.arguments()
+        #expect(args.contains("--filter") == false)
+    }
+
     @Test func extensionTokenExpansion() {
         let input = URL(fileURLWithPath: "/Users/me/x.heic")
         let out = BgBgOneCommand.resolveOutputURL(

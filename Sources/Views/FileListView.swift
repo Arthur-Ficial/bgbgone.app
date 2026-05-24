@@ -11,6 +11,11 @@ struct FileListView: View {
         KeyPathComparator(\ImageFile.name, order: .forward),
     ]
 
+    @FocusState private var listIsFocused: Bool
+
+    @State private var showDeleteConfirm: Bool = false
+    @State private var pendingDeletionIDs: Set<ImageFile.ID> = []
+
     var body: some View {
         Table(sortedFiles, selection: tableSelection, sortOrder: $sortOrder) {
             TableColumn("Name", value: \.name) { file in
@@ -43,6 +48,16 @@ struct FileListView: View {
             }
             .width(min: 100, ideal: 110, max: 140)
 
+            TableColumn("Cutout") { file in
+                cutoutCell(file)
+            }
+            .width(min: 180, ideal: 220, max: 280)
+
+            TableColumn("Source Folder", value: \.sourceFolderSortKey) { file in
+                sourceFolderCell(file)
+            }
+            .width(min: 140, ideal: 180, max: 220)
+
             TableColumn("Modified", value: \.modifiedAt) { file in
                 Text(file.modifiedAt, format: .dateTime.day().month().hour().minute())
                     .foregroundStyle(.secondary)
@@ -50,18 +65,7 @@ struct FileListView: View {
             .width(min: 120, ideal: 150)
         }
         .contextMenu(forSelectionType: ImageFile.ID.self) { ids in
-            if ids.isEmpty {
-                Button("Add files…", action: { /* handled via toolbar */ }).disabled(true)
-            } else {
-                Button(ids.count == 1 ? "Show in Finder" : "Show all in Finder", systemImage: "folder") {
-                    let urls = viewModel.files.filter { ids.contains($0.id) }.map(\.url)
-                    NSWorkspace.shared.activateFileViewerSelecting(urls)
-                }
-                Divider()
-                Button("Remove from Queue", systemImage: "trash", role: .destructive) {
-                    viewModel.files.removeAll { ids.contains($0.id) }
-                }
-            }
+            contextMenu(for: ids)
         } primaryAction: { ids in
             if let first = ids.first {
                 viewModel.selectedId = first
@@ -78,6 +82,68 @@ struct FileListView: View {
         .overlay {
             if viewModel.visibleFiles.isEmpty { emptyState }
         }
+        .background(
+            QuickLookKeyResponder(
+                onSpace: handleQuickLook,
+                onReturn: handleOpenInDefaultApp,
+                onDelete: handleDelete
+            )
+        )
+        .confirmationDialog(
+            "Remove \(pendingDeletionIDs.count) images from queue?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Remove \(pendingDeletionIDs.count) from Queue", role: .destructive) {
+                viewModel.removeFiles(ids: pendingDeletionIDs)
+                pendingDeletionIDs = []
+            }
+            Button("Cancel", role: .cancel) { pendingDeletionIDs = [] }
+        } message: {
+            Text("They will be removed from the queue. Files on disk are not affected.")
+        }
+    }
+
+    private func handleDelete() {
+        let ids = viewModel.selectedIds
+        guard !ids.isEmpty else { return }
+        if ids.count >= 10 {
+            pendingDeletionIDs = ids
+            showDeleteConfirm = true
+        } else {
+            viewModel.removeFiles(ids: ids)
+        }
+    }
+
+    private func handleQuickLook() {
+        let selection = currentSelectionFiles()
+        guard !selection.isEmpty else { return }
+        let urls = QuickLookURLs.urls(
+            for: selection,
+            cutoutURL: { file in
+                BgBgOneCommand.resolveOutputURL(
+                    for: file.url,
+                    in: viewModel.config.outDirectory,
+                    pattern: viewModel.config.namePattern,
+                    format: viewModel.config.format
+                )
+            },
+            fileExists: { FileManager.default.fileExists(atPath: $0.path) }
+        )
+        QuickLookController.shared.present(urls: urls)
+    }
+
+    private func handleOpenInDefaultApp() {
+        let selection = currentSelectionFiles()
+        for file in selection {
+            NSWorkspace.shared.open(file.url)
+        }
+    }
+
+    private func currentSelectionFiles() -> [ImageFile] {
+        let ids = viewModel.selectedIds
+        guard !ids.isEmpty else { return [] }
+        return viewModel.files.filter { ids.contains($0.id) }
     }
 
     @ViewBuilder private var emptyState: some View {
@@ -105,13 +171,8 @@ struct FileListView: View {
 
     private var tableSelection: Binding<Set<ImageFile.ID>> {
         Binding(
-            get: {
-                if let id = viewModel.selectedId { return [id] }
-                return []
-            },
-            set: { newSet in
-                viewModel.selectedId = newSet.first
-            }
+            get: { viewModel.selectedIds },
+            set: { viewModel.selectedIds = $0 }
         )
     }
 
@@ -123,6 +184,120 @@ struct FileListView: View {
     private func dimsText(_ file: ImageFile) -> String {
         guard let w = file.width, let h = file.height else { return "—" }
         return "\(w) × \(h)"
+    }
+
+    @ViewBuilder
+    private func contextMenu(for ids: Set<ImageFile.ID>) -> some View {
+        if ids.isEmpty {
+            Button("Add files…", action: { /* handled via toolbar */ }).disabled(true)
+        } else {
+            let selection = viewModel.files.filter { ids.contains($0.id) }
+            let actions = FileRowActions.actions(
+                for: selection,
+                cutoutURL: { file in
+                    BgBgOneCommand.resolveOutputURL(
+                        for: file.url,
+                        in: viewModel.config.outDirectory,
+                        pattern: viewModel.config.namePattern,
+                        format: viewModel.config.format
+                    )
+                },
+                fileExists: { FileManager.default.fileExists(atPath: $0.path) }
+            )
+            ForEach(actions) { action in
+                contextMenuButton(action, selection: selection)
+                if action.kind == .openCutout || action.kind == .copyCutoutPath {
+                    Divider()
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func contextMenuButton(
+        _ action: FileRowActions.ActionItem,
+        selection: [ImageFile]
+    ) -> some View {
+        Button(action.label, systemImage: systemImage(for: action.kind), role: role(for: action.kind)) {
+            handle(action, selection: selection)
+        }
+        .disabled(!action.isEnabled)
+    }
+
+    private func systemImage(for kind: FileRowActions.Kind) -> String {
+        switch kind {
+        case .revealOriginal, .revealCutout: "folder"
+        case .openOriginal, .openCutout: "arrow.up.right.square"
+        case .copyOriginalPath, .copyCutoutPath: "doc.on.clipboard"
+        case .removeFromQueue: "trash"
+        }
+    }
+
+    private func role(for kind: FileRowActions.Kind) -> ButtonRole? {
+        kind == .removeFromQueue ? .destructive : nil
+    }
+
+    private func handle(_ action: FileRowActions.ActionItem, selection: [ImageFile]) {
+        switch action.kind {
+        case .revealOriginal, .revealCutout:
+            NSWorkspace.shared.activateFileViewerSelecting(action.urls)
+        case .openOriginal, .openCutout:
+            for url in action.urls { NSWorkspace.shared.open(url) }
+        case .copyOriginalPath, .copyCutoutPath:
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(
+                action.urls.map(\.path).joined(separator: "\n"),
+                forType: .string
+            )
+        case .removeFromQueue:
+            let ids = Set(selection.map(\.id))
+            viewModel.files.removeAll { ids.contains($0.id) }
+        }
+    }
+
+    @ViewBuilder
+    private func cutoutCell(_ file: ImageFile) -> some View {
+        let cutoutURL = BgBgOneCommand.resolveOutputURL(
+            for: file.url,
+            in: viewModel.config.outDirectory,
+            pattern: viewModel.config.namePattern,
+            format: viewModel.config.format
+        )
+        let exists = FileManager.default.fileExists(atPath: cutoutURL.path)
+        HStack(spacing: 6) {
+            if exists, let thumb = ThumbnailCache.shared.thumbnail(for: cutoutURL) {
+                Image(nsImage: thumb)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 22, height: 22)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+            } else {
+                Image(systemName: "photo")
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 22, height: 22)
+            }
+            Text(cutoutURL.lastPathComponent)
+                .foregroundStyle(exists ? .primary : .tertiary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .onTapGesture {
+                    if exists { NSWorkspace.shared.open(cutoutURL) }
+                }
+        }
+    }
+
+    @ViewBuilder
+    private func sourceFolderCell(_ file: ImageFile) -> some View {
+        if let name = SourceFolder.name(for: file, in: viewModel.batches) {
+            Text(name)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(SourceFolder.url(for: file, in: viewModel.batches)?.path ?? name)
+        } else {
+            Text("—")
+                .foregroundStyle(.tertiary)
+        }
     }
 }
 
@@ -175,4 +350,8 @@ struct DropSummaryChip: View {
 private extension ImageFile {
     var bytesSortKey: Int { bytes ?? -1 }
     var pixelArea: Int { (width ?? 0) * (height ?? 0) }
+    /// Sort by relativePath which carries the batch-relative prefix; loose files
+    /// (empty relativePath) sort lexicographically at the top, batched files below.
+    /// T1 acceptance: "loose files sink to bottom". `~` sorts after letters in ASCII.
+    var sourceFolderSortKey: String { batchId == nil ? "~~~" : relativePath }
 }

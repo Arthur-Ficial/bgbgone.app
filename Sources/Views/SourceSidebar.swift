@@ -13,19 +13,26 @@ struct SourceSidebar: View {
                 }
             }
 
-            if !viewModel.batches.isEmpty {
-                Section("Sources") {
-                    ForEach(viewModel.batches) { batch in
-                        NavigationLink(value: SidebarItem.batch(batch.id)) {
-                            Label(batch.name, systemImage: "folder")
-                                .badge(batch.imageCount)
-                        }
+            Section("Sources") {
+                // T13: always-on "Single Files" row, even when empty.
+                NavigationLink(value: SidebarItem.batch(Batch.singleFilesID)) {
+                    Label(Batch.singleFilesDisplayName, systemImage: "doc.on.doc")
+                        .badge(singleFilesCount)
+                }
+                ForEach(viewModel.batches.filter { $0.id != Batch.singleFilesID }) { batch in
+                    NavigationLink(value: SidebarItem.batch(batch.id)) {
+                        Label(batch.name, systemImage: "folder")
+                            .badge(batch.imageCount)
                     }
                 }
             }
         }
         .listStyle(.sidebar)
         .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
+    }
+
+    private var singleFilesCount: Int {
+        viewModel.batches.first(where: { $0.id == Batch.singleFilesID })?.imageCount ?? 0
     }
 }
 

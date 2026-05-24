@@ -27,12 +27,13 @@ struct AppViewModelTests {
         func read(_ url: URL) throws -> ImageMeta { ImageMeta(width: 100, height: 100, bytes: 1234) }
     }
 
-    static func makeVM() -> AppViewModel {
+    static func makeVM(historyStore: RunHistoryStore? = nil) -> AppViewModel {
         AppViewModel(
             runner: InstantRunner(),
             scanner: FolderScanner(),
             metaReader: StubMetaReader(),
-            bootState: .ready(binary: URL(fileURLWithPath: "/tmp/bgbgone-stub"))
+            bootState: .ready(binary: URL(fileURLWithPath: "/tmp/bgbgone-stub")),
+            historyStore: historyStore
         )
     }
 
@@ -99,12 +100,32 @@ struct AppViewModelTests {
         }
     }
 
+    @Test func processAllAppendsHistoryEntryPerFile() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AppVMHistoryTest-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = RunHistoryStore(directory: dir)
+
+        let vm = Self.makeVM(historyStore: store)
+        await vm.handleDrop(urls: [Self.scanTree])
+        await vm.processAll()
+
+        for file in vm.files {
+            let entries = await store.entries(for: file.id)
+            #expect(entries.count == 1, "expected 1 history entry for \(file.name)")
+            #expect(entries.first?.outcome == .success)
+            #expect(entries.first?.durationMillis == 42)
+            #expect(entries.first?.outputURL != nil)
+        }
+    }
+
     @Test func processAllIsNoOpWhenBinaryMissing() async {
         let vm = AppViewModel(
             runner: nil,
             scanner: FolderScanner(),
             metaReader: StubMetaReader(),
-            bootState: .missingBinary(searched: ["/nowhere"])
+            bootState: .missingBinary(searched: ["/nowhere"]),
+            historyStore: nil
         )
         await vm.handleDrop(urls: [Self.scanTree])
         await vm.processAll()

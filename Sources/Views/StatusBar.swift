@@ -20,6 +20,8 @@ struct StatusBar: View {
                 Text("No images yet")
             }
             Spacer()
+            openSourceFolderButton
+            openOutputFolderButton
             Text("→ \(samplePreviewPath)")
                 .font(.caption.monospaced())
                 .lineLimit(1)
@@ -41,6 +43,40 @@ struct StatusBar: View {
 
     private var errorCount: Int {
         viewModel.files.lazy.filter { if case .error = $0.state { return true } else { return false } }.count
+    }
+
+    private var resolvedSourceFolder: URL? {
+        FolderOpener.resolveSourceFolder(
+            sidebar: viewModel.sidebarSelection,
+            batches: viewModel.batches,
+            visibleFiles: viewModel.visibleFiles
+        )
+    }
+
+    @ViewBuilder
+    private var openSourceFolderButton: some View {
+        let url = resolvedSourceFolder
+        Button {
+            if let url { FolderOpener.openInFinder(url) }
+        } label: {
+            Label(url == nil ? "Open Source Folder (no single source)" : "Open Source Folder", systemImage: "folder")
+                .labelStyle(.iconOnly)
+        }
+        .buttonStyle(.borderless)
+        .disabled(url == nil)
+        .help(url == nil ? "Open Source Folder — no single source folder for the current view" : "Open Source Folder — \(url!.path)")
+    }
+
+    @ViewBuilder
+    private var openOutputFolderButton: some View {
+        Button {
+            try? FolderOpener.openOutputFolder(viewModel.config.outDirectory)
+        } label: {
+            Label("Open Output Folder", systemImage: "tray.full")
+                .labelStyle(.iconOnly)
+        }
+        .buttonStyle(.borderless)
+        .help("Open Output Folder — \(viewModel.config.outDirectory.path)")
     }
 
     private var samplePreviewPath: String {

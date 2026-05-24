@@ -20,7 +20,15 @@ final class AppViewModel {
 
     var files: [ImageFile] = []
     var batches: [Batch] = []
-    var selectedId: ImageFile.ID?
+
+    /// Multi-select selection model (T9). The Table binds directly to this.
+    /// `selectedId` (singular) is a thin compat shim that reads/writes the first
+    /// element — preserved for views that only need one item (inspector preview).
+    var selectedIds: Set<ImageFile.ID> = []
+    var selectedId: ImageFile.ID? {
+        get { selectedIds.first }
+        set { selectedIds = newValue.map { Set([$0]) } ?? [] }
+    }
     var config: Config = Config(outDirectory: Config.defaultOutDirectory)
 
     /// Finder-style sidebar selection. `.all` shows every file; `.batch(id)` filters.
@@ -42,6 +50,16 @@ final class AppViewModel {
     private let runner: (any BgBgOneRunning)?
     private let scanner: any FolderScanning
     private let metaReader: any ImageMetaReading
+    let historyStore: RunHistoryStore?
+    let undoManager = BgBgOneUndoManager()
+    private var processingStartedAt: [UUID: Date] = [:]
+    /// Files that are part of the in-flight batch, captured at `processSelected` entry
+    /// so the post-run undo registration sees a stable id set.
+    private var currentBatchIDs: Set<UUID> = []
+    private var currentBatchSnapshot: ConfigSnapshot?
+    /// T7 — fire-and-forget Task for the active batch. `nil` when idle; set by
+    /// `startProcessing`, cleared when the task completes (success or cancelled).
+    private(set) var activeRun: Task<Void, Never>?
     private let logger = Logger(subsystem: BuildInfo.osLogSubsystem, category: "app")
 
     // MARK: - init
@@ -67,7 +85,8 @@ final class AppViewModel {
             runner: runner,
             scanner: FolderScanner(),
             metaReader: ImageMetaReader(),
-            bootState: bootState
+            bootState: bootState,
+            historyStore: RunHistoryStore(directory: RunHistoryStore.defaultDirectory)
         )
     }
 
@@ -77,12 +96,14 @@ final class AppViewModel {
         runner: (any BgBgOneRunning)?,
         scanner: any FolderScanning,
         metaReader: any ImageMetaReading,
-        bootState: BootState
+        bootState: BootState,
+        historyStore: RunHistoryStore?
     ) {
         self.runner = runner
         self.scanner = scanner
         self.metaReader = metaReader
         self.bootState = bootState
+        self.historyStore = historyStore
         self.dropMachine = DropMachine()
     }
 
@@ -181,10 +202,21 @@ final class AppViewModel {
 
         var addedImages: [ImageFile] = []
 
-        // 1. Loose images first — no batch, just appear in the queue.
+        // T13: ensure the "Single Files" virtual batch exists before loose-drop
+        // ingestion so loose files get a real batchId (not nil).
+        if !looseImageURLs.isEmpty, !batches.contains(where: { $0.id == Batch.singleFilesID }) {
+            batches.append(
+                Batch(id: Batch.singleFilesID, name: Batch.singleFilesDisplayName, rootURL: nil)
+            )
+        }
+
+        // 1. Loose images go into the "Single Files" virtual batch.
         for url in looseImageURLs {
-            let file = makeImageFile(at: url, batchId: nil, relativePath: "")
+            let file = makeImageFile(at: url, batchId: Batch.singleFilesID, relativePath: "")
             addedImages.append(file)
+            if let idx = batches.firstIndex(where: { $0.id == Batch.singleFilesID }) {
+                batches[idx].imageCount += 1
+            }
             dropMachine.applyScanEvent(.foundImage(url: url, relativePath: url.lastPathComponent))
             dropMachine.applyScanEvent(.scanned(url: url, isImage: true))
         }
@@ -193,7 +225,7 @@ final class AppViewModel {
         var totalScanned = 0
         var totalSkipped = 0
         for folder in folderURLs {
-            let batch = Batch(name: folder.lastPathComponent, addedAt: .now)
+            let batch = Batch(name: folder.lastPathComponent, rootURL: folder, addedAt: .now)
             batches.append(batch)
             for await event in scanner.scan(folder) {
                 switch event {
@@ -261,30 +293,139 @@ final class AppViewModel {
         }.count
     }
 
+    /// Computed primary toolbar button label. While idle, "Remove background from N
+    /// images"; during a run, "Stop — N of M done". T7 acceptance: label derived
+    /// purely from state, never set imperatively.
+    var primaryActionLabel: String {
+        if let activeRun, !activeRun.isCancelled, !activeRunFinished {
+            return "Stop — \(doneCount) of \(files.count) done"
+        }
+        let pending = pendingCount
+        return pending == 1 ? "Remove background from 1 image" : "Remove background from \(pending) images"
+    }
+
+    private var activeRunFinished: Bool = false
+
+    private var doneCount: Int {
+        files.lazy.filter { if case .done = $0.state { return true } else { return false } }.count
+    }
+
+    /// T7 — fire-and-forget entry point for the toolbar button. Spawns a Task that
+    /// drives `processSelected` and stores the handle in `activeRun` so the toolbar
+    /// can switch to a "Stop" label and cancel it.
+    func startProcessing(ids: Set<UUID>) {
+        guard activeRun == nil else { return }
+        activeRunFinished = false
+        activeRun = Task { [weak self] in
+            await self?.processSelected(ids: ids)
+            await MainActor.run {
+                self?.activeRunFinished = true
+                self?.activeRun = nil
+            }
+        }
+    }
+
+    /// T7 — cancel the in-flight batch. In-flight items revert from `.processing`
+    /// back to `.queued` (handled by `markFinished` when it sees `RunnerError.cancelled`).
+    func stopActiveRun() {
+        activeRun?.cancel()
+    }
+
+    /// T6 — re-run already-`.done` files with the **current** config (not the snapshot
+    /// from the historical run). Trashes the previous output via `TrashService` then
+    /// transitions `.done → .queued` and processes through the normal pipeline.
+    /// Non-`.done` files in the selection are skipped.
+    func rerunSelectedWithCurrentSettings(ids: Set<UUID>) async {
+        guard !ids.isEmpty else { return }
+        let doneIDs = Set(files.lazy.filter { file in
+            ids.contains(file.id) && (file.state.isRequeueable == false && file.state != .queued && file.state != .processing)
+        }.map(\.id))
+        guard !doneIDs.isEmpty else { return }
+
+        if let historyStore {
+            for id in doneIDs {
+                let entries = await historyStore.entries(for: id)
+                guard let outputURL = entries.last?.outputURL else { continue }
+                _ = try? TrashService.trash(outputURL)
+            }
+        }
+
+        for idx in files.indices where doneIDs.contains(files[idx].id) {
+            files[idx].state = .queued
+        }
+        await processSelected(ids: doneIDs)
+    }
+
+    // MARK: - Selection (T9)
+
+    /// Select every visible file (respecting `sidebarSelection`). Cmd-A.
+    func selectAllVisible() {
+        selectedIds = Set(visibleFiles.map(\.id))
+    }
+
+    /// Clear selection. Cmd-Shift-A.
+    func deselectAll() {
+        selectedIds = []
+    }
+
+    /// Remove files from the queue and prune them from the selection. Delete /
+    /// Backspace. The View layer is responsible for the confirm prompt when count ≥ 10.
+    func removeFiles(ids: Set<ImageFile.ID>) {
+        files.removeAll { ids.contains($0.id) }
+        selectedIds.subtract(ids)
+    }
+
     /// "Remove background from N" → enqueue every `.raw` / `.error` file.
     ///
     /// No-op when the binary is missing: the UI shows `MissingBinaryView` and disables
     /// the toolbar action, so this is the explicit assertion of that invariant rather
     /// than a fallback.
     func processAll() async {
-        guard let runner else { return }
+        await processSelected(ids: Set(files.map(\.id)))
+    }
 
-        for idx in files.indices where files[idx].state.isRequeueable {
+    /// T5 "Process This Only" — enqueue only the files in `ids` that are currently
+    /// `.raw` or `.error`. Already-`.done` items are skipped (T6 re-runs them
+    /// separately). Empty `ids` is a no-op.
+    func processSelected(ids: Set<UUID>) async {
+        await processSelected(ids: ids, configOverride: nil)
+    }
+
+    /// Internal entry-point that also supports T8 redo, which passes the historical
+    /// `ConfigSnapshot` to use instead of the live `config`.
+    private func processSelected(ids: Set<UUID>, configOverride: ConfigSnapshot?) async {
+        guard let runner else { return }
+        guard !ids.isEmpty else { return }
+
+        let activeConfig = configOverride ?? ConfigSnapshot(
+            outDirectory: config.outDirectory,
+            namePattern: config.namePattern,
+            background: config.background,
+            format: config.format,
+            filterChain: config.effectiveFilterString
+        )
+
+        for idx in files.indices where ids.contains(files[idx].id) && files[idx].state.isRequeueable {
             files[idx].state = .queued
         }
+        let queuedIDs = Set(files.lazy.filter { ids.contains($0.id) && $0.state == .queued }.map(\.id))
+        currentBatchIDs = queuedIDs
+        currentBatchSnapshot = activeConfig
+
         let workItems: [QueueRunner.WorkItem] = files.compactMap { file in
-            guard file.state == .queued else { return nil }
+            guard ids.contains(file.id), file.state == .queued else { return nil }
             let output = BgBgOneCommand.resolveOutputURL(
                 for: file.url,
-                in: config.outDirectory,
-                pattern: config.namePattern,
-                format: config.format
+                in: activeConfig.outDirectory,
+                pattern: activeConfig.namePattern,
+                format: activeConfig.format
             )
             let cmd = BgBgOneCommand(
                 input: file.url,
                 output: output,
-                background: config.background,
-                format: config.format
+                background: activeConfig.background,
+                format: activeConfig.format,
+                filterChain: activeConfig.filterChain
             )
             guard let args = try? cmd.arguments() else { return nil }
             return QueueRunner.WorkItem(id: file.id, arguments: args)
@@ -294,27 +435,122 @@ final class AppViewModel {
         await queue.process(
             workItems,
             onStart: { [weak self] id in
-                Task { @MainActor in self?.markProcessing(id: id) }
+                await self?.markProcessing(id: id)
             },
             onResult: { [weak self] id, result in
-                Task { @MainActor in self?.markFinished(id: id, result: result) }
+                await self?.markFinished(id: id, result: result)
             }
         )
+
+        finalizeBatchForUndo()
+    }
+
+    private func finalizeBatchForUndo() {
+        let batchIDs = currentBatchIDs
+        guard !batchIDs.isEmpty, let snapshot = currentBatchSnapshot else { return }
+        let successfulIDs = Set(files.lazy.filter { file in
+            guard batchIDs.contains(file.id) else { return false }
+            if case .done = file.state { return true }
+            return false
+        }.map(\.id))
+        if !successfulIDs.isEmpty {
+            undoManager.register(ids: successfulIDs, snapshot: snapshot)
+        }
+        currentBatchIDs = []
+        currentBatchSnapshot = nil
+    }
+
+    /// T8 — undo last completed batch. Trashes outputs, transitions `.done → .raw`.
+    func undoLastRun() async {
+        guard activeRun == nil, let entry = undoManager.popUndo() else { return }
+        if let historyStore {
+            for id in entry.ids {
+                let entries = await historyStore.entries(for: id)
+                guard let outputURL = entries.last?.outputURL else { continue }
+                _ = try? TrashService.trash(outputURL)
+            }
+        }
+        for idx in files.indices where entry.ids.contains(files[idx].id) {
+            files[idx].state = .raw
+        }
+    }
+
+    /// T8 — redo last undone batch. Re-processes with the **snapshotted** config from
+    /// the original run, not the live `config`.
+    func redoLastRun() async {
+        guard activeRun == nil, let entry = undoManager.popRedo() else { return }
+        await processSelected(ids: entry.ids, configOverride: entry.snapshot)
     }
 
     private func markProcessing(id: UUID) {
         guard let idx = files.firstIndex(where: { $0.id == id }) else { return }
         files[idx].state = .processing
+        processingStartedAt[id] = .now
     }
 
-    private func markFinished(id: UUID, result: Result<RunResult, Error>) {
+    private func markFinished(id: UUID, result: Result<RunResult, Error>) async {
         guard let idx = files.firstIndex(where: { $0.id == id }) else { return }
+        let startedAt = processingStartedAt.removeValue(forKey: id) ?? .now
+        let finishedAt = Date.now
+        // Prefer the batch's active snapshot (set by `processSelected`); falls back to
+        // live config in case markFinished fires outside the normal pipeline.
+        let snapshot = currentBatchSnapshot ?? ConfigSnapshot(
+            outDirectory: config.outDirectory,
+            namePattern: config.namePattern,
+            background: config.background,
+            format: config.format,
+            filterChain: config.effectiveFilterString
+        )
+        let entry: RunHistoryEntry
         switch result {
         case .success(let outcome):
             files[idx].state = .done(milliseconds: outcome.durationMillis)
+            entry = RunHistoryEntry(
+                id: UUID(),
+                startedAt: startedAt,
+                finishedAt: finishedAt,
+                durationMillis: outcome.durationMillis,
+                outputURL: outcome.output,
+                outcome: .success,
+                configSnapshot: snapshot
+            )
         case .failure(let err):
+            if case RunnerError.cancelled = err {
+                files[idx].state = .queued
+                processingStartedAt.removeValue(forKey: id)
+                return
+            }
             files[idx].state = .error(message: "\(err)")
             logger.error("file \(id.uuidString, privacy: .public) failed: \(String(describing: err), privacy: .public)")
+            entry = RunHistoryEntry(
+                id: UUID(),
+                startedAt: startedAt,
+                finishedAt: finishedAt,
+                durationMillis: Int(finishedAt.timeIntervalSince(startedAt) * 1000),
+                outputURL: nil,
+                outcome: .failure(code: errorCode(err), message: "\(err)"),
+                configSnapshot: snapshot
+            )
+        }
+        await recordHistory(id: id, entry: entry)
+    }
+
+    private func recordHistory(id: UUID, entry: RunHistoryEntry) async {
+        guard let historyStore else { return }
+        await historyStore.append(entry, for: id)
+        try? await historyStore.flush()
+    }
+
+    private func errorCode(_ err: Error) -> String {
+        guard let runner = err as? RunnerError else { return "BGBG_UNKNOWN" }
+        switch runner {
+        case .userError: return "BGBG_USER_ERROR"
+        case .noSubject: return "BGBG_NORESULT_NO_SUBJECT"
+        case .framework: return "BGBG_FRAMEWORK_INTERNAL_INVARIANT"
+        case .cancelled: return "BGBG_CANCELLED"
+        case .timeout: return "BGBG_TIMEOUT"
+        case .malformedJSON: return "BGBG_MALFORMED_JSON"
+        case .binaryNotExecutable: return "BGBG_BINARY_NOT_EXECUTABLE"
         }
     }
 

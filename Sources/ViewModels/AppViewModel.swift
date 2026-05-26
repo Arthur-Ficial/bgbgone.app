@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 import os
 
 /// Top-level UI state owner. Views observe `files`, `batches`, `selectedId`, `config`,
@@ -19,7 +20,28 @@ final class AppViewModel {
     private(set) var bootState: BootState = .starting
 
     var files: [ImageFile] = []
-    var batches: [Batch] = []
+
+    /// O(1) lookup used by `markProcessing` / `markFinished` so per-file
+    /// completion is O(1) instead of `files.firstIndex(where:)` which makes a
+    /// 100-file batch O(N²). Rebuilt only on array *reshape* (append / remove)
+    /// — per-element `files[idx].state = …` mutations never shift indices, so
+    /// they don't need to touch this dict.
+    private var fileIndexByID: [ImageFile.ID: Int] = [:]
+
+    private func rebuildFileIndex() {
+        fileIndexByID = Dictionary(uniqueKeysWithValues: files.enumerated().map { ($1.id, $0) })
+    }
+
+    /// Use `appendBatch(_:)`, `setBatch(_:at:)`, or `mutateBatch(id:_:)` for
+    /// mutations so `batchesByID` stays in sync. Direct array index assignment
+    /// is allowed only within `AppViewModel`.
+    private(set) var batches: [Batch] = [] {
+        didSet { batchesByID = Dictionary(uniqueKeysWithValues: batches.map { ($0.id, $0) }) }
+    }
+
+    /// O(1) batch lookup used by the file list (Source Folder column) and the
+    /// row-action menu. Kept in sync with `batches` via the property observer.
+    private(set) var batchesByID: [Batch.ID: Batch] = [:]
 
     /// Multi-select selection model (T9). The Table binds directly to this.
     /// `selectedId` (singular) is a thin compat shim that reads/writes the first
@@ -29,7 +51,45 @@ final class AppViewModel {
         get { selectedIds.first }
         set { selectedIds = newValue.map { Set([$0]) } ?? [] }
     }
-    var config: Config = Config(outDirectory: Config.defaultOutDirectory)
+    /// Template config that new drops inherit. Edits to the Inspector when
+    /// no file is selected write here; new files clone this on ingest.
+    var defaultConfig: Config = Config(outDirectory: Config.defaultOutDirectory)
+
+    /// O(1) lookup of the currently-selected file via `fileIndexByID`.
+    /// Replaces the `files.first(where: { $0.id == selectedId })` scan that
+    /// was called from at least 4 views per body invocation.
+    var selectedFile: ImageFile? {
+        guard let id = selectedId,
+              let idx = fileIndexByID[id],
+              idx < files.count,
+              files[idx].id == id else { return nil }
+        return files[idx]
+    }
+
+    /// Binding the Inspector edits — reflects the currently-selected
+    /// file's per-image config (or `defaultConfig` when no file is
+    /// selected). Mutations route back to the right owner.
+    var inspectorConfigBinding: Binding<Config> {
+        Binding(
+            get: {
+                if let id = self.selectedId, let idx = self.fileIndexByID[id], idx < self.files.count {
+                    return self.files[idx].config
+                }
+                return self.defaultConfig
+            },
+            set: { newValue in
+                if let id = self.selectedId, let idx = self.fileIndexByID[id], idx < self.files.count {
+                    self.files[idx].config = newValue
+                } else {
+                    self.defaultConfig = newValue
+                }
+            }
+        )
+    }
+
+    /// Convenience read-only accessor used by views that don't need a
+    /// binding (StatusBar samples, DebugOverlay, etc.).
+    var config: Config { inspectorConfigBinding.wrappedValue }
 
     /// Finder-style sidebar selection. `.all` shows every file; `.batch(id)` filters.
     var sidebarSelection: SidebarItem? = .all
@@ -113,80 +173,28 @@ final class AppViewModel {
     func handleDragLeave() { dropMachine.handleDragLeave() }
     func dismissSummary() { dropMachine.dismissSummary() }
 
-    // MARK: - Demo Mode
-
-    /// Demo download state — drives an attribution sheet + progress UI.
-    var demoState: DemoState = .idle
-
-    enum DemoState: Equatable {
-        case idle
-        case fetching
-        case failed(message: String)
-    }
-
-    /// Downloads the 10 public-domain demo images (manifest at scripts/demo-manifest.json),
-    /// then ingests the cache dir exactly like a user-dropped folder. Real script, real
-    /// curl, real attribution; no fake/sample files baked into the bundle.
-    func startDemo(scriptURL: URL, manifestURL: URL) async {
-        demoState = .fetching
-        defer {
-            if case .fetching = demoState { demoState = .idle }
+    /// Try-Demo entrypoint. Copies the 3 PD/CC0 images bundled at
+    /// `Contents/Resources/demo/` into a tmp directory and feeds them
+    /// through the normal `handleDrop` pipeline. No network, no JSON, no
+    /// attribution sheet — replaces the fragile fetch-script + manifest
+    /// approach. Returns silently if the bundled demo folder isn't found
+    /// (e.g. unit-test target).
+    func startBuiltInDemo() async {
+        guard let demoDir = Bundle.main.url(forResource: "demo", withExtension: nil) else { return }
+        let images = (try? FileManager.default.contentsOfDirectory(
+            at: demoDir, includingPropertiesForKeys: nil
+        )) ?? []
+        guard !images.isEmpty else { return }
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("bgbgone-demo", isDirectory: true)
+        // Recreate each invocation so re-clicking Try Demo gives a fresh batch.
+        try? FileManager.default.removeItem(at: tmp)
+        try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        for img in images {
+            let dest = tmp.appendingPathComponent(img.lastPathComponent)
+            try? FileManager.default.copyItem(at: img, to: dest)
         }
-
-        do {
-            let cacheDir = try await runFetchScript(scriptURL: scriptURL, manifestURL: manifestURL)
-            await handleDrop(urls: [cacheDir])
-            demoState = .idle
-        } catch {
-            demoState = .failed(message: "\(error)")
-            logger.error("demo fetch failed: \(String(describing: error), privacy: .public)")
-        }
-    }
-
-    private func runFetchScript(scriptURL: URL, manifestURL: URL) async throws -> URL {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/bin/bash")
-            process.arguments = [scriptURL.path]
-            let stdout = Pipe()
-            process.standardOutput = stdout
-            process.standardError = Pipe()
-            process.terminationHandler = { proc in
-                let data = (try? stdout.fileHandleForReading.readToEnd()) ?? Data()
-                guard proc.terminationStatus == 0 else {
-                    continuation.resume(throwing: DemoError.fetchExitNonZero(code: Int(proc.terminationStatus)))
-                    return
-                }
-                // The script prints the cache dir as its last stdout line.
-                let lines = (String(data: data, encoding: .utf8) ?? "")
-                    .split(whereSeparator: \.isNewline)
-                    .map(String.init)
-                guard let lastLine = lines.last(where: { !$0.isEmpty }),
-                      FileManager.default.fileExists(atPath: lastLine) else {
-                    continuation.resume(throwing: DemoError.cacheDirNotResolved)
-                    return
-                }
-                continuation.resume(returning: URL(fileURLWithPath: lastLine))
-            }
-            do {
-                try process.run()
-            } catch {
-                continuation.resume(throwing: DemoError.spawnFailed(message: "\(error)"))
-            }
-        }
-    }
-
-    enum DemoError: Error, CustomStringConvertible {
-        case fetchExitNonZero(code: Int)
-        case cacheDirNotResolved
-        case spawnFailed(message: String)
-        var description: String {
-            switch self {
-            case .fetchExitNonZero(let code): "fetch-demo-images.sh exited with code \(code)"
-            case .cacheDirNotResolved: "fetch script ran but did not print a cache directory path"
-            case .spawnFailed(let msg): "could not spawn fetch script: \(msg)"
-            }
-        }
+        await handleDrop(urls: [tmp])
     }
 
     /// Called when the user drops folders / files on the window.
@@ -256,6 +264,7 @@ final class AppViewModel {
         }
 
         files.append(contentsOf: addedImages)
+        rebuildFileIndex()
         if selectedId == nil, let first = addedImages.first { selectedId = first.id }
 
         dropMachine.applyScanEvent(.completed(
@@ -268,7 +277,7 @@ final class AppViewModel {
     /// Build an `ImageFile`, reading dims/bytes synchronously. Sync is fine here —
     /// `ImageMetaReader` doesn't decode pixels and runs in well under a millisecond.
     private func makeImageFile(at url: URL, batchId: Batch.ID?, relativePath: String) -> ImageFile {
-        var file = ImageFile(url: url, batchId: batchId, relativePath: relativePath)
+        var file = ImageFile(url: url, batchId: batchId, relativePath: relativePath, config: defaultConfig)
         if let meta = try? metaReader.read(url) {
             file.width = meta.width
             file.height = meta.height
@@ -278,6 +287,9 @@ final class AppViewModel {
            let modified = attrs[.modificationDate] as? Date {
             file.modifiedAt = modified
         }
+        // One syscall on ingest — never in a view body.
+        let cutout = file.cutoutURL(in: file.config)
+        file.cutoutExists = FileManager.default.fileExists(atPath: cutout.path)
         return file
     }
 
@@ -331,6 +343,40 @@ final class AppViewModel {
         activeRun?.cancel()
     }
 
+    /// "Run all" toolbar action — apply the currently-visible Inspector
+    /// settings to EVERY file (overwriting per-image configs), then rerun.
+    /// User mental model: tweak the Inspector, click Run all, every image
+    /// gets those settings.
+    func runAllWithVisibleSettings() async {
+        let visible = inspectorConfigBinding.wrappedValue
+        for idx in files.indices {
+            files[idx].config = visible
+        }
+        await rerun(ids: Set(files.map(\.id)))
+    }
+
+    /// Rerun a single file regardless of its current state — `.done` files
+    /// have their previous output trashed; `.raw`/`.error`/`.queued`/`.processing`
+    /// files reset to `.queued` and re-run. The user can hit this any time.
+    func rerun(ids: Set<UUID>) async {
+        guard activeRun == nil, !ids.isEmpty else { return }
+        if let historyStore {
+            for id in ids {
+                if let idx = fileIndexByID[id], case .done = files[idx].state {
+                    let entries = await historyStore.entries(for: id)
+                    if let outputURL = entries.last?.outputURL {
+                        _ = try? TrashService.trash(outputURL)
+                    }
+                }
+            }
+        }
+        for idx in files.indices where ids.contains(files[idx].id) {
+            files[idx].state = .queued
+            files[idx].cutoutExists = false
+        }
+        await processSelected(ids: ids)
+    }
+
     /// T6 — re-run already-`.done` files with the **current** config (not the snapshot
     /// from the historical run). Trashes the previous output via `TrashService` then
     /// transitions `.done → .queued` and processes through the normal pipeline.
@@ -352,6 +398,7 @@ final class AppViewModel {
 
         for idx in files.indices where doneIDs.contains(files[idx].id) {
             files[idx].state = .queued
+            files[idx].cutoutExists = false
         }
         await processSelected(ids: doneIDs)
     }
@@ -372,7 +419,18 @@ final class AppViewModel {
     /// Backspace. The View layer is responsible for the confirm prompt when count ≥ 10.
     func removeFiles(ids: Set<ImageFile.ID>) {
         files.removeAll { ids.contains($0.id) }
+        rebuildFileIndex()
         selectedIds.subtract(ids)
+    }
+
+    /// Debug-overlay "Reset to fresh state" entrypoint. Goes through the
+    /// ViewModel so `batchesByID` stays in sync with `batches`.
+    func resetAllForDebug() {
+        files.removeAll()
+        rebuildFileIndex()
+        batches.removeAll()
+        selectedIds.removeAll()
+        dropMachine.dismissSummary()
     }
 
     /// "Remove background from N" → enqueue every `.raw` / `.error` file.
@@ -392,40 +450,42 @@ final class AppViewModel {
     }
 
     /// Internal entry-point that also supports T8 redo, which passes the historical
-    /// `ConfigSnapshot` to use instead of the live `config`.
+    /// `ConfigSnapshot` to use instead of each file's per-image config.
     private func processSelected(ids: Set<UUID>, configOverride: ConfigSnapshot?) async {
         guard let runner else { return }
         guard !ids.isEmpty else { return }
 
-        let activeConfig = configOverride ?? ConfigSnapshot(
-            outDirectory: config.outDirectory,
-            namePattern: config.namePattern,
-            background: config.background,
-            format: config.format,
-            filterChain: config.effectiveFilterString
-        )
-
         for idx in files.indices where ids.contains(files[idx].id) && files[idx].state.isRequeueable {
             files[idx].state = .queued
+            files[idx].cutoutExists = false
         }
         let queuedIDs = Set(files.lazy.filter { ids.contains($0.id) && $0.state == .queued }.map(\.id))
         currentBatchIDs = queuedIDs
-        currentBatchSnapshot = activeConfig
+        // For undo-snapshot bookkeeping: capture the first file's config
+        // (or the override). Per-image divergence is intentional; the undo
+        // snapshot just records "what was used most recently". Redo replays
+        // via the explicit snapshot regardless.
+        let representative = configOverride ?? Self.snapshot(of: files.first { ids.contains($0.id) }?.config ?? defaultConfig)
+        currentBatchSnapshot = representative
 
         let workItems: [QueueRunner.WorkItem] = files.compactMap { file in
             guard ids.contains(file.id), file.state == .queued else { return nil }
+            // Each file uses its OWN per-image config (or the historical
+            // override during redo). Both shapes carry the same fields.
+            let snap = configOverride ?? Self.snapshot(of: file.config)
             let output = BgBgOneCommand.resolveOutputURL(
                 for: file.url,
-                in: activeConfig.outDirectory,
-                pattern: activeConfig.namePattern,
-                format: activeConfig.format
+                in: snap.outDirectory,
+                pattern: snap.namePattern,
+                format: snap.format
             )
             let cmd = BgBgOneCommand(
                 input: file.url,
                 output: output,
-                background: activeConfig.background,
-                format: activeConfig.format,
-                filterChain: activeConfig.filterChain
+                background: snap.background,
+                format: snap.format,
+                algorithm: snap.algorithm,
+                filterChain: snap.filterChain
             )
             guard let args = try? cmd.arguments() else { return nil }
             return QueueRunner.WorkItem(id: file.id, arguments: args)
@@ -472,6 +532,7 @@ final class AppViewModel {
         }
         for idx in files.indices where entry.ids.contains(files[idx].id) {
             files[idx].state = .raw
+            files[idx].cutoutExists = false
         }
     }
 
@@ -483,28 +544,28 @@ final class AppViewModel {
     }
 
     private func markProcessing(id: UUID) {
-        guard let idx = files.firstIndex(where: { $0.id == id }) else { return }
+        guard let idx = fileIndexByID[id], idx < files.count, files[idx].id == id else { return }
         files[idx].state = .processing
+        files[idx].cutoutExists = false
         processingStartedAt[id] = .now
     }
 
     private func markFinished(id: UUID, result: Result<RunResult, Error>) async {
-        guard let idx = files.firstIndex(where: { $0.id == id }) else { return }
+        guard let idx = fileIndexByID[id], idx < files.count, files[idx].id == id else { return }
         let startedAt = processingStartedAt.removeValue(forKey: id) ?? .now
         let finishedAt = Date.now
         // Prefer the batch's active snapshot (set by `processSelected`); falls back to
-        // live config in case markFinished fires outside the normal pipeline.
-        let snapshot = currentBatchSnapshot ?? ConfigSnapshot(
-            outDirectory: config.outDirectory,
-            namePattern: config.namePattern,
-            background: config.background,
-            format: config.format,
-            filterChain: config.effectiveFilterString
-        )
+        // this file's own per-image config so history records what was actually used.
+        let snapshot = currentBatchSnapshot ?? Self.snapshot(of: files[idx].config)
         let entry: RunHistoryEntry
         switch result {
         case .success(let outcome):
             files[idx].state = .done(milliseconds: outcome.durationMillis)
+            files[idx].cutoutExists = true
+            // The file at `outcome.output` was just (re)written. Drop any
+            // cached thumbnail for that URL so the preview shows the new
+            // pixels instead of a stale cache hit.
+            ThumbnailCache.shared.invalidate(url: outcome.output)
             entry = RunHistoryEntry(
                 id: UUID(),
                 startedAt: startedAt,
@@ -555,6 +616,18 @@ final class AppViewModel {
     }
 
     // MARK: - Helpers
+
+    /// Freeze a live `Config` into a `ConfigSnapshot` for history / undo.
+    private static func snapshot(of config: Config) -> ConfigSnapshot {
+        ConfigSnapshot(
+            outDirectory: config.outDirectory,
+            namePattern: config.namePattern,
+            background: config.background,
+            format: config.format,
+            algorithm: config.algorithm,
+            filterChain: config.effectiveFilterString
+        )
+    }
 
     private static func isDirectory(_ url: URL) -> Bool {
         var isDir: ObjCBool = false

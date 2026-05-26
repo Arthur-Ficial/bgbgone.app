@@ -69,15 +69,15 @@ cp "$ROOT_DIR/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 
 [[ -f "$ICON_SOURCE" ]] && cp "$ICON_SOURCE" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 
-# Bundle Demo Mode assets — the fetch script + manifest live next to the helper.
-DEMO_SRC="$ROOT_DIR/scripts"
-DEMO_DEST="$APP_BUNDLE/Contents/Resources/scripts"
-if [[ -f "$DEMO_SRC/demo-manifest.json" && -f "$DEMO_SRC/fetch-demo-images.sh" ]]; then
-    print "==> Bundling Demo Mode assets (manifest + fetch script)"
+# Bundle the 3 built-in demo images directly into Resources/demo/.
+# Demo Mode: zero network, zero JSON parsing. The Try Demo button copies
+# these to a tmp dir and drops them through the normal pipeline.
+DEMO_SRC="$ROOT_DIR/Resources/demo"
+DEMO_DEST="$APP_BUNDLE/Contents/Resources/demo"
+if [[ -d "$DEMO_SRC" ]]; then
+    print "==> Bundling Demo images from Resources/demo/"
     mkdir -p "$DEMO_DEST"
-    cp "$DEMO_SRC/demo-manifest.json" "$DEMO_DEST/demo-manifest.json"
-    cp "$DEMO_SRC/fetch-demo-images.sh" "$DEMO_DEST/fetch-demo-images.sh"
-    chmod +x "$DEMO_DEST/fetch-demo-images.sh"
+    cp "$DEMO_SRC"/*.jpg "$DEMO_DEST/" 2>/dev/null || true
 fi
 
 if HELPER_PATH="$(resolve_helper 2>/dev/null)"; then

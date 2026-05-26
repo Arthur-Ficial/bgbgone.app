@@ -165,4 +165,46 @@ struct BgBgOneCommandTests {
         )
         #expect(out == URL(fileURLWithPath: "/Users/me/cutouts/x.jpg"))
     }
+
+    @Test func algoAutoEmitsNoFlag() throws {
+        let cmd = BgBgOneCommand(
+            input: Self.input, output: Self.output,
+            background: .transparent, format: .png, algorithm: .auto
+        )
+        let args = try cmd.arguments()
+        #expect(args.contains("--algo") == false)
+    }
+
+    @Test func algoVnMaskEmitsFlag() throws {
+        let cmd = BgBgOneCommand(
+            input: Self.input, output: Self.output,
+            background: .transparent, format: .png, algorithm: .vnMask
+        )
+        let args = try cmd.arguments()
+        let idx = args.firstIndex(of: "--algo")
+        #expect(idx != nil)
+        if let idx { #expect(args[args.index(after: idx)] == "vn-mask") }
+    }
+
+    @Test func algoPersonEmitsFlag() throws {
+        let cmd = BgBgOneCommand(
+            input: Self.input, output: Self.output,
+            background: .transparent, format: .png, algorithm: .person
+        )
+        let args = try cmd.arguments()
+        let idx = args.firstIndex(of: "--algo")
+        #expect(idx != nil)
+        if let idx { #expect(args[args.index(after: idx)] == "person") }
+    }
+
+    @Test func algoSaliencyEmitsFlag() throws {
+        let cmd = BgBgOneCommand(
+            input: Self.input, output: Self.output,
+            background: .transparent, format: .png, algorithm: .saliency
+        )
+        let args = try cmd.arguments()
+        let idx = args.firstIndex(of: "--algo")
+        #expect(idx != nil)
+        if let idx { #expect(args[args.index(after: idx)] == "saliency") }
+    }
 }

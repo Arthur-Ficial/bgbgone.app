@@ -28,6 +28,35 @@ enum OutputFormat: String, Sendable, Hashable, CaseIterable, Codable {
     }
 }
 
+/// Segmentation algorithm — maps to bgbgone's `--algo` flag. Values match the
+/// CLI verbatim (see `bgbgone --help`: auto | vn-mask | person | saliency).
+enum Algorithm: String, Sendable, Hashable, CaseIterable, Codable {
+    case auto      = "auto"
+    case vnMask    = "vn-mask"
+    case person    = "person"
+    case saliency  = "saliency"
+
+    var cliValue: String { rawValue }
+
+    var displayLabel: String {
+        switch self {
+        case .auto: "Auto"
+        case .vnMask: "Vision Mask"
+        case .person: "Person"
+        case .saliency: "Saliency"
+        }
+    }
+
+    var helpText: String {
+        switch self {
+        case .auto: "Pick the best on-device algorithm (default)."
+        case .vnMask: "VNGenerateForegroundInstanceMaskRequest — macOS 14+."
+        case .person: "VNGeneratePersonSegmentationRequest — best for people."
+        case .saliency: "VNGenerateObjectnessBasedSaliencyImageRequest — heuristic."
+        }
+    }
+}
+
 /// User-configurable settings. Owned by `AppViewModel`, persisted via `UserDefaults`.
 /// One `Config` applies uniformly to every queued file (per-file overrides land in v0.2).
 struct Config: Sendable, Hashable {
@@ -40,6 +69,7 @@ struct Config: Sendable, Hashable {
 
     var background: BackgroundChoice = .transparent
     var format: OutputFormat = .png
+    var algorithm: Algorithm = .auto
 
     // MARK: - T14 first-class filter controls
     // Each is `Optional<T>` — `nil` means "control is off, emit no recipe". Active

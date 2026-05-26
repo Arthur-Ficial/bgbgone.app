@@ -235,7 +235,11 @@ struct NoFakeUITests {
         #expect(allText.contains("NavigationSplitView"), "Sources/ must use NavigationSplitView — see CLAUDE.md §'Finder feel'")
         #expect(allText.contains("Table("), "Sources/ must use real Table (not LazyVStack) — see CLAUDE.md §'Finder feel'")
         #expect(allText.contains(".toolbar"), "Sources/ must use real .toolbar (not custom title bar)")
-        #expect(allText.contains("Form {") || allText.contains("Form{"), "Sources/ must use real Form for config")
+        // Config is now composed from `GroupBox` instead of `Form { Section { ... } }`
+        // because macOS 26's `.grouped` Form has noticeably heavy layout overhead
+        // that made the Inspector feel sluggish (user feedback 2026-05-24).
+        // Both are stock SwiftUI primitives from the Finder-feel charter.
+        #expect(allText.contains("GroupBox("), "Sources/ must use real GroupBox for config grouping")
         #expect(allText.contains(".inspector("), "Sources/ should use real .inspector(isPresented:) for the side pane")
         #expect(allText.contains("Picker("), "Sources/ should use real Picker")
     }

@@ -4,22 +4,22 @@ import SwiftUI
 /// composed chain from the GUI controls. Live-validates via `FilterChainParser` and
 /// shows the live composed chain (from GUI controls) for reference.
 struct AdvancedChainEditor: View {
-    @Bindable var viewModel: AppViewModel
+    @Binding var config: Config
     @State private var isExpanded: Bool = false
     @State private var parseError: String? = nil
 
     private var textBinding: Binding<String> {
         Binding(
-            get: { viewModel.config.advancedFilterText ?? "" },
+            get: { config.advancedFilterText ?? "" },
             set: { newValue in
-                viewModel.config.advancedFilterText = newValue.isEmpty ? nil : newValue
+                config.advancedFilterText = newValue.isEmpty ? nil : newValue
                 validate(newValue)
             }
         )
     }
 
     var body: some View {
-        DisclosureGroup("Advanced — full filter chain", isExpanded: $isExpanded) {
+        ClickRowDisclosure(title: "Advanced — full filter chain", isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Override the GUI controls with a hand-written `--filter` chain.")
                     .font(.caption)
@@ -45,7 +45,7 @@ struct AdvancedChainEditor: View {
                         .foregroundStyle(.red)
                 }
 
-                let composed = viewModel.config.filterChain.dslString
+                let composed = config.filterChain.dslString
                 if !composed.isEmpty {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Composed from GUI controls (used when text above is empty):")

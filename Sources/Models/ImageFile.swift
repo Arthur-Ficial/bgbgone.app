@@ -24,13 +24,26 @@ struct ImageFile: Sendable, Identifiable, Hashable {
     /// Empty string when not batched. Computed by `FolderScanner` from the drop root.
     var relativePath: String
 
+    /// Tracked output presence — true when the cutout exists on disk for the
+    /// currently-relevant config. Mutated by the ViewModel on state transitions
+    /// (`.done` set true; `.raw`/`.queued` set false) so view bodies never call
+    /// `FileManager.fileExists` per-row, per-redraw.
+    var cutoutExists: Bool = false
+
+    /// Per-image settings (Background / Format / Algorithm / Save-to / Name
+    /// pattern / Filter chain). Each file owns its config so the Inspector
+    /// can switch as the user selects different rows. New drops inherit
+    /// `AppViewModel.defaultConfig`.
+    var config: Config
+
     init(
         id: UUID = UUID(),
         url: URL,
         state: ProcessingState = .raw,
         modifiedAt: Date = .now,
         batchId: Batch.ID? = nil,
-        relativePath: String = ""
+        relativePath: String = "",
+        config: Config = Config(outDirectory: Config.defaultOutDirectory)
     ) {
         self.id = id
         self.url = url
@@ -39,5 +52,19 @@ struct ImageFile: Sendable, Identifiable, Hashable {
         self.modifiedAt = modifiedAt
         self.batchId = batchId
         self.relativePath = relativePath
+        self.config = config
+    }
+
+    /// SSOT cutout URL for this file under a given Config. Every cell, every
+    /// preview pane, every context-menu action resolves through this — never
+    /// inline `BgBgOneCommand.resolveOutputURL(for: ..., in: ..., pattern: ...,
+    /// format: ...)` again.
+    func cutoutURL(in config: Config) -> URL {
+        BgBgOneCommand.resolveOutputURL(
+            for: url,
+            in: config.outDirectory,
+            pattern: config.namePattern,
+            format: config.format
+        )
     }
 }

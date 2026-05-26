@@ -70,4 +70,35 @@ struct RerunWithCurrentSettingsTests {
             }
         }
     }
+
+    /// New permissive `rerun(ids:)` — user wants to re-run a file regardless
+    /// of its current state. `.raw`, `.error`, and `.done` files all reset
+    /// to `.queued` and then get processed.
+    @Test func rerunFromRawProcessesFile() async throws {
+        let (vm, _, dir) = Self.makeVM()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        await vm.handleDrop(urls: [AppViewModelTests.scanTree])
+        // All files are .raw at this point — no processAll().
+        let firstID = vm.files[0].id
+        await vm.rerun(ids: [firstID])
+        guard case .done = vm.files[0].state else {
+            Issue.record("rerun() on .raw file should end at .done; got \(vm.files[0].state)")
+            return
+        }
+    }
+
+    @Test func rerunFromDoneProcessesAgain() async throws {
+        let (vm, store, dir) = Self.makeVM()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        await vm.handleDrop(urls: [AppViewModelTests.scanTree])
+        await vm.processAll()
+        let firstID = vm.files[0].id
+        await vm.rerun(ids: [firstID])
+        guard case .done = vm.files[0].state else {
+            Issue.record("rerun() on .done file should end at .done again")
+            return
+        }
+        let entries = await store.entries(for: firstID)
+        #expect(entries.count == 2, "expected two history entries after rerun() on done")
+    }
 }

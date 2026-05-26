@@ -8,6 +8,7 @@ struct ConfigSnapshot: Sendable, Hashable, Codable {
     var namePattern: String
     var background: BackgroundChoice
     var format: OutputFormat
+    var algorithm: Algorithm = .auto
 
     /// The composed `--filter` chain string used for the run. Empty when no filters were
     /// active. T14 wires the live filter UI into this field; T10 lands it as an empty

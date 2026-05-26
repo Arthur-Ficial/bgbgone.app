@@ -58,13 +58,16 @@ struct UndoRedoIntegrationTests {
     @Test func redoUsesSnapshotConfigNotCurrent() async {
         let (vm, store, dir) = Self.makeVM()
         defer { try? FileManager.default.removeItem(at: dir) }
+        // Set output dir A as the template; new files inherit it on ingest.
+        vm.defaultConfig.outDirectory = URL(fileURLWithPath: "/tmp/out-A", isDirectory: true)
         await vm.handleDrop(urls: [AppViewModelTests.scanTree])
-        // Set output dir A, process.
-        vm.config.outDirectory = URL(fileURLWithPath: "/tmp/out-A", isDirectory: true)
         await vm.processAll()
         let firstID = vm.files[0].id
-        // Change output dir to B.
-        vm.config.outDirectory = URL(fileURLWithPath: "/tmp/out-B", isDirectory: true)
+        // Change ALL files' per-image config to B, simulating the user
+        // editing the Inspector for every selected row after-the-fact.
+        for idx in vm.files.indices {
+            vm.files[idx].config.outDirectory = URL(fileURLWithPath: "/tmp/out-B", isDirectory: true)
+        }
         await vm.undoLastRun()
         await vm.redoLastRun()
         // Redo should use snapshot A, not current B.

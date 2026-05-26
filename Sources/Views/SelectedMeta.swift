@@ -17,16 +17,24 @@ struct SelectedMeta: View {
                 Text(metaLine(for: file))
                     .font(.callout.monospaced())
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
-                Spacer()
+                Spacer(minLength: 8)
 
                 StatusPill(state: file.state)
+                    .layoutPriority(1)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
         }
     }
 
+    /// Dims + size only — duration is already shown by `StatusPill`
+    /// ("Done · N ms"), so repeating "removed in N ms" here was duplicate
+    /// info that pushed text onto a second line and shoved the Rerun button
+    /// around (jitter). DRY.
     private func metaLine(for file: ImageFile) -> String {
         var parts: [String] = []
         if let w = file.width, let h = file.height {
@@ -34,9 +42,6 @@ struct SelectedMeta: View {
         }
         if let bytes = file.bytes {
             parts.append(Self.humanBytes(bytes))
-        }
-        if case .done(let ms) = file.state, ms > 0 {
-            parts.append("removed in \(ms) ms")
         }
         return parts.joined(separator: " · ")
     }

@@ -96,10 +96,7 @@ struct DebugOverlay: View {
         SectionLabel("Demo")
         VStack(alignment: .leading, spacing: 6) {
             Button("Reset to fresh state") {
-                viewModel.files.removeAll()
-                viewModel.batches.removeAll()
-                viewModel.selectedId = nil
-                viewModel.dismissSummary()
+                viewModel.resetAllForDebug()
                 log.clear()
             }
             .buttonStyle(MiniDebugButtonStyle())
@@ -139,15 +136,9 @@ struct DebugOverlay: View {
 
     private func previewArgv() -> String {
         guard let selected = viewModel.files.first(where: { $0.id == viewModel.selectedId }) else { return "" }
-        let output = BgBgOneCommand.resolveOutputURL(
-            for: selected.url,
-            in: viewModel.config.outDirectory,
-            pattern: viewModel.config.namePattern,
-            format: viewModel.config.format
-        )
         let cmd = BgBgOneCommand(
             input: selected.url,
-            output: output,
+            output: selected.cutoutURL(in: viewModel.config),
             background: viewModel.config.background,
             format: viewModel.config.format
         )
@@ -285,8 +276,7 @@ enum DemoPhase: String, CaseIterable {
             vm.dismissSummary()
             if case .drag = vm.dropMachine.phase { vm.handleDragLeave() }
         case .empty:
-            vm.files.removeAll(); vm.batches.removeAll(); vm.selectedId = nil
-            vm.dismissSummary()
+            vm.resetAllForDebug()
         case .dragFolder:
             vm.handleDragEnter(hint: DragHint(folderCount: 1, imageCount: 0, otherCount: 0, folderName: "client-headshots"))
         case .dragFiles:

@@ -14,10 +14,13 @@ struct SourceSidebar: View {
             }
 
             Section("Sources") {
-                // T13: always-on "Single Files" row, even when empty.
-                NavigationLink(value: SidebarItem.batch(Batch.singleFilesID)) {
-                    Label(Batch.singleFilesDisplayName, systemImage: "doc.on.doc")
-                        .badge(singleFilesCount)
+                // KISS: only show "Single Files" once it has actual contents.
+                // Hiding empty rows reduces first-launch clutter.
+                if singleFilesCount > 0 {
+                    NavigationLink(value: SidebarItem.batch(Batch.singleFilesID)) {
+                        Label(Batch.singleFilesDisplayName, systemImage: "doc.on.doc")
+                            .badge(singleFilesCount)
+                    }
                 }
                 ForEach(viewModel.batches.filter { $0.id != Batch.singleFilesID }) { batch in
                     NavigationLink(value: SidebarItem.batch(batch.id)) {
@@ -32,7 +35,7 @@ struct SourceSidebar: View {
     }
 
     private var singleFilesCount: Int {
-        viewModel.batches.first(where: { $0.id == Batch.singleFilesID })?.imageCount ?? 0
+        viewModel.batchesByID[Batch.singleFilesID]?.imageCount ?? 0
     }
 }
 

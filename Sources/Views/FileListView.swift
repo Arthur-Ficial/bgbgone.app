@@ -4,7 +4,6 @@ import SwiftUI
 /// context menu. Drives `AppViewModel.selectedId` (single) for the inspector preview.
 struct FileListView: View {
     @Bindable var viewModel: AppViewModel
-    let onTryDemo: () -> Void
     let onDismissSummary: () -> Void
 
     @State private var sortOrder: [KeyPathComparator<ImageFile>] = [
@@ -67,8 +66,10 @@ struct FileListView: View {
         .contextMenu(forSelectionType: ImageFile.ID.self) { ids in
             contextMenu(for: ids)
         } primaryAction: { ids in
-            if let first = ids.first {
-                viewModel.selectedId = first
+            // Double-click: open the image(s) in the default app. Single
+            // click already selects via Table's selection binding.
+            for file in viewModel.files where ids.contains(file.id) {
+                NSWorkspace.shared.open(file.url)
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -118,16 +119,10 @@ struct FileListView: View {
     private func handleQuickLook() {
         let selection = currentSelectionFiles()
         guard !selection.isEmpty else { return }
+        // Each file uses its own per-image config to resolve the cutout URL.
         let urls = QuickLookURLs.urls(
             for: selection,
-            cutoutURL: { file in
-                BgBgOneCommand.resolveOutputURL(
-                    for: file.url,
-                    in: viewModel.config.outDirectory,
-                    pattern: viewModel.config.namePattern,
-                    format: viewModel.config.format
-                )
-            },
+            cutoutURL: { $0.cutoutURL(in: $0.config) },
             fileExists: { FileManager.default.fileExists(atPath: $0.path) }
         )
         QuickLookController.shared.present(urls: urls)
@@ -147,19 +142,18 @@ struct FileListView: View {
     }
 
     @ViewBuilder private var emptyState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 14) {
             Image(systemName: "tray.and.arrow.down")
-                .font(.system(size: 44, weight: .ultraLight))
+                .font(.system(size: 56, weight: .ultraLight))
                 .foregroundStyle(.tertiary)
-            Text("Drop a folder or images here")
-                .font(.headline)
+            Text("Drop images here")
+                .font(.title2)
                 .foregroundStyle(.primary)
-            Text("or use Add files… in the toolbar")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            Button("Try Demo (10 public-domain images)", action: onTryDemo)
-                .buttonStyle(.bordered)
-                .padding(.top, 6)
+            Button("Try Demo") {
+                Task { await viewModel.startBuiltInDemo() }
+            }
+            .controlSize(.small)
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.background)
@@ -194,16 +188,16 @@ struct FileListView: View {
             let selection = viewModel.files.filter { ids.contains($0.id) }
             let actions = FileRowActions.actions(
                 for: selection,
-                cutoutURL: { file in
-                    BgBgOneCommand.resolveOutputURL(
-                        for: file.url,
-                        in: viewModel.config.outDirectory,
-                        pattern: viewModel.config.namePattern,
-                        format: viewModel.config.format
-                    )
-                },
+                cutoutURL: { $0.cutoutURL(in: $0.config) },
                 fileExists: { FileManager.default.fileExists(atPath: $0.path) }
             )
+
+            Button(processThisOnlyLabel(count: ids.count), systemImage: "wand.and.stars") {
+                viewModel.startProcessing(ids: ids)
+            }
+            .disabled(viewModel.activeRun != nil)
+            Divider()
+
             ForEach(actions) { action in
                 contextMenuButton(action, selection: selection)
                 if action.kind == .openCutout || action.kind == .copyCutoutPath {
@@ -211,6 +205,10 @@ struct FileListView: View {
                 }
             }
         }
+    }
+
+    private func processThisOnlyLabel(count: Int) -> String {
+        count == 1 ? "Process This Only" : "Process This Only (\(count))"
     }
 
     @ViewBuilder
@@ -250,20 +248,14 @@ struct FileListView: View {
                 forType: .string
             )
         case .removeFromQueue:
-            let ids = Set(selection.map(\.id))
-            viewModel.files.removeAll { ids.contains($0.id) }
+            viewModel.removeFiles(ids: Set(selection.map(\.id)))
         }
     }
 
     @ViewBuilder
     private func cutoutCell(_ file: ImageFile) -> some View {
-        let cutoutURL = BgBgOneCommand.resolveOutputURL(
-            for: file.url,
-            in: viewModel.config.outDirectory,
-            pattern: viewModel.config.namePattern,
-            format: viewModel.config.format
-        )
-        let exists = FileManager.default.fileExists(atPath: cutoutURL.path)
+        let cutoutURL = file.cutoutURL(in: file.config)
+        let exists = file.cutoutExists
         HStack(spacing: 6) {
             if exists, let thumb = ThumbnailCache.shared.thumbnail(for: cutoutURL) {
                 Image(nsImage: thumb)
@@ -288,12 +280,12 @@ struct FileListView: View {
 
     @ViewBuilder
     private func sourceFolderCell(_ file: ImageFile) -> some View {
-        if let name = SourceFolder.name(for: file, in: viewModel.batches) {
+        if let name = SourceFolder.name(for: file, byID: viewModel.batchesByID) {
             Text(name)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .help(SourceFolder.url(for: file, in: viewModel.batches)?.path ?? name)
+                .help(SourceFolder.url(for: file, byID: viewModel.batchesByID)?.path ?? name)
         } else {
             Text("—")
                 .foregroundStyle(.tertiary)

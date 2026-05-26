@@ -13,14 +13,15 @@ enum QuickLookURLs {
         cutoutURL: (ImageFile) -> URL?,
         fileExists: (URL) -> Bool
     ) -> [URL] {
-        var out: [URL] = []
-        for file in selection {
-            out.append(file.url)
-            guard case .done = file.state, let cutout = cutoutURL(file), fileExists(cutout) else {
-                continue
+        // Finder-style preference: if the cutout (the "new" output) exists,
+        // Space-bar previews the cutout. Otherwise fall back to the
+        // original input. One URL per file, never both — the file list
+        // already shows both thumbnails for comparison.
+        selection.map { file in
+            if let cutout = cutoutURL(file), fileExists(cutout) {
+                return cutout
             }
-            out.append(cutout)
+            return file.url
         }
-        return out
     }
 }

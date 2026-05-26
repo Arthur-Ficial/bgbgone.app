@@ -2,100 +2,96 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-/// Finder/System-Settings-style `Form` panel. Stock `Picker` / `TextField` / `ColorPicker`
-/// / `.fileImporter`. Lives in the inspector column on the right side of the window.
+/// Inspector form: Background / Format / Algorithm pickers. Takes an
+/// explicit `Binding<Config>` so it can edit either the selected file's
+/// per-image config or the default-template config — the caller decides
+/// which by passing the right binding.
 struct ConfigPanel: View {
-    @Bindable var viewModel: AppViewModel
-    @State private var folderImporterShown = false
+    @Binding var config: Config
     @State private var imageImporterShown = false
     @State private var colourBinding: Color = .white
 
     var body: some View {
-        Form {
-            Section("Save to") {
-                HStack {
-                    Label(displayPath, systemImage: "folder")
-                        .labelStyle(.titleAndIcon)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Spacer()
-                    Button("Choose…") { folderImporterShown = true }
-                }
-            }
-
-            Section("Name as") {
-                TextField("Filename pattern", text: $viewModel.config.namePattern)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.body.monospaced())
-                HStack(spacing: 6) {
-                    ForEach(["{name}", "{ext}", "{n:02}"], id: \.self) { token in
-                        Button(token) { viewModel.config.namePattern += token }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                    }
-                }
-                .padding(.top, 4)
-            }
-
-            Section("Background") {
-                Picker("", selection: backgroundCase) {
-                    Text("Transparent").tag(BackgroundCase.transparent)
-                    Text("Color").tag(BackgroundCase.color)
-                    Text("Image").tag(BackgroundCase.image)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-
-                if case .color = viewModel.config.background {
-                    ColorPicker("Colour", selection: $colourBinding, supportsOpacity: false)
-                        .onChange(of: colourBinding) { _, new in
-                            viewModel.config.background = .color(hex: new.toHex() ?? "#ffffff")
-                        }
-                }
-                if case .image(let url) = viewModel.config.background {
+        VStack(alignment: .leading, spacing: 14) {
+            GroupBox("Background") {
+                VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Label(url.lastPathComponent, systemImage: "photo")
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Spacer()
-                        Button("Change…") { imageImporterShown = true }
+                        Picker("Background", selection: backgroundCase) {
+                            Text("Transparent").tag(BackgroundCase.transparent)
+                            Text("Color").tag(BackgroundCase.color)
+                            Text("Image").tag(BackgroundCase.image)
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
+                        Spacer(minLength: 0)
+                    }
+
+                    if case .color = config.background {
+                        ColorPicker("Colour", selection: $colourBinding, supportsOpacity: false)
+                            .onChange(of: colourBinding) { _, new in
+                                config.background = .color(hex: new.toHex() ?? "#ffffff")
+                            }
+                    }
+                    if case .image(let url) = config.background {
+                        HStack {
+                            Label(url.lastPathComponent, systemImage: "photo")
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer()
+                            Button("Change…") { imageImporterShown = true }
+                        }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Section("Format") {
-                Picker("", selection: $viewModel.config.format) {
-                    ForEach(OutputFormat.allCases, id: \.self) { format in
-                        Text(format.displayLabel).tag(format)
+            GroupBox("Format") {
+                HStack {
+                    Picker("Format", selection: $config.format) {
+                        ForEach(OutputFormat.allCases, id: \.self) { format in
+                            Text(format.displayLabel).tag(format)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                    Spacer(minLength: 0)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            GroupBox("Algorithm") {
+                HStack {
+                    Picker("Algorithm", selection: $config.algorithm) {
+                        ForEach(Algorithm.allCases, id: \.self) { algo in
+                            Text(algo.displayLabel).tag(algo)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .formStyle(.grouped)
-        .fileImporter(
-            isPresented: $folderImporterShown,
-            allowedContentTypes: [.folder],
-            onCompletion: handleFolderPick
-        )
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .fileImporter(
             isPresented: $imageImporterShown,
             allowedContentTypes: [.png, .jpeg, .heic, .tiff],
             onCompletion: handleImagePick
         )
         .onAppear(perform: syncColourFromBackground)
-    }
-
-    private var displayPath: String {
-        viewModel.config.outDirectory.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+        .onChange(of: config.background) { _, _ in syncColourFromBackground() }
     }
 
     /// Bridge `BackgroundChoice` (associated values) ↔ `Picker` (needs a `Hashable` tag).
     private var backgroundCase: Binding<BackgroundCase> {
         Binding(
             get: {
-                switch viewModel.config.background {
+                switch config.background {
                 case .transparent: .transparent
                 case .color: .color
                 case .image: .image
@@ -104,38 +100,25 @@ struct ConfigPanel: View {
             set: { newCase in
                 switch newCase {
                 case .transparent:
-                    viewModel.config.background = .transparent
+                    config.background = .transparent
                 case .color:
                     let hex = colourBinding.toHex() ?? "#ffffff"
-                    viewModel.config.background = .color(hex: hex)
+                    config.background = .color(hex: hex)
                 case .image:
-                    // We can't pick a URL synchronously from the segmented control —
-                    // open the importer; until the user picks something, stay on the
-                    // last image URL we had, or fall back to transparent.
-                    if case .image = viewModel.config.background {
-                        imageImporterShown = true
-                    } else {
-                        imageImporterShown = true
-                    }
+                    imageImporterShown = true
                 }
             }
         )
     }
 
-    private func handleFolderPick(_ result: Result<URL, Error>) {
-        if case .success(let url) = result {
-            viewModel.config.outDirectory = url
-        }
-    }
-
     private func handleImagePick(_ result: Result<URL, Error>) {
         if case .success(let url) = result {
-            viewModel.config.background = .image(url)
+            config.background = .image(url)
         }
     }
 
     private func syncColourFromBackground() {
-        if case .color(let hex) = viewModel.config.background {
+        if case .color(let hex) = config.background {
             colourBinding = Color(hex: hex)
         }
     }

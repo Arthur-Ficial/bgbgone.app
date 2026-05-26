@@ -21,13 +21,15 @@ for arg in "$@"; do
     esac
     case "$arg" in
         -o|--output) NEXT="output" ;;
-        --json|--quiet|--bg|--bg-fit|--to) ;;
+        --json|--quiet|--bg|--bg-fit|--format) ;;
         -*) ;;
         *) [[ -z "$INPUT" ]] && INPUT="$arg" ;;
     esac
 done
 
-DEFAULT_JSON='{"input":"'"$INPUT"'","output":"'"$OUTPUT"'","algo":"vn-mask","format":"png","width":1024,"height":768}'
+# Mirror the REAL bgbgone --json envelope exactly: a wrapped {ok,schema,result}
+# object, not a flat one. Tests decode the same shape the production CLI emits.
+DEFAULT_JSON='{"ok":true,"schema":"bgbgone.run.v1","result":{"input":"'"$INPUT"'","output":"'"$OUTPUT"'","algo":"vn-mask","format":"png","width":1024,"height":768,"filters":[]}}'
 
 [[ -n "${MOCK_DELAY:-}" ]] && sleep "$MOCK_DELAY"
 [[ -n "${MOCK_STDERR:-}" ]] && print -u 2 -- "$MOCK_STDERR"

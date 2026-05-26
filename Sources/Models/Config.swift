@@ -11,7 +11,7 @@ enum BackgroundChoice: Sendable, Hashable {
 enum OutputFormat: String, Sendable, Hashable, CaseIterable, Codable {
     case png, jpg, heic, tiff
 
-    /// CLI argument value (`--to png`, etc.).
+    /// CLI argument value (`--format png`, etc.).
     var cliValue: String { rawValue }
 
     /// File extension to append to the resolved output path.

@@ -1,9 +1,13 @@
 import Foundation
 
-/// JSON shape emitted by `bgbgone --json` on success, plus a measured wall-clock
-/// `durationMillis` that the runner stamps after `Process` termination. The CLI does
-/// not emit `durationMillis` — when reading from JSON it defaults to 0 and
-/// `BgBgOneRunner` overwrites it with the real measurement before resuming.
+/// The success result carried inside `bgbgone --json` output, plus a measured
+/// wall-clock `durationMillis` that the runner stamps after `Process` termination.
+///
+/// The CLI wraps the result in an envelope — `{"ok":true,"schema":"bgbgone.run.v1",
+/// "result":{ input, output, algo, format, width, height, filters }}` — so this type
+/// decodes/encodes that nested shape (schema v1). The CLI does not emit
+/// `durationMillis`; it defaults to 0 on decode and `BgBgOneRunner` overwrites it with
+/// the real measurement before resuming.
 struct RunResult: Sendable, Hashable, Codable {
     let input: URL
     let output: URL
@@ -16,9 +20,17 @@ struct RunResult: Sendable, Hashable, Codable {
     /// tests that don't model time).
     let durationMillis: Int
 
+    /// Top-level envelope keys the CLI wraps the result in.
+    private enum EnvelopeKeys: String, CodingKey {
+        case ok, schema, result
+    }
+
+    /// Keys of the nested `result` object.
     private enum CodingKeys: String, CodingKey {
         case input, output, algo, format, width, height
     }
+
+    static let schema = "bgbgone.run.v1"
 
     init(input: URL, output: URL, algo: String, format: String, width: Int, height: Int, durationMillis: Int = 0) {
         self.input = input
@@ -30,9 +42,11 @@ struct RunResult: Sendable, Hashable, Codable {
         self.durationMillis = durationMillis
     }
 
-    /// bgbgone emits `input` and `output` as paths (strings), not file URLs.
+    /// Decode the CLI's wrapped envelope, reading fields from the nested `result`
+    /// object. `input`/`output` arrive as path strings, not file URLs.
     init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let envelope = try decoder.container(keyedBy: EnvelopeKeys.self)
+        let c = try envelope.nestedContainer(keyedBy: CodingKeys.self, forKey: .result)
         let inputStr = try c.decode(String.self, forKey: .input)
         let outputStr = try c.decode(String.self, forKey: .output)
         self.input = URL(fileURLWithPath: inputStr)
@@ -44,8 +58,12 @@ struct RunResult: Sendable, Hashable, Codable {
         self.durationMillis = 0
     }
 
+    /// Encode back into the same wrapped envelope the CLI emits (round-trippable).
     func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
+        var envelope = encoder.container(keyedBy: EnvelopeKeys.self)
+        try envelope.encode(true, forKey: .ok)
+        try envelope.encode(Self.schema, forKey: .schema)
+        var c = envelope.nestedContainer(keyedBy: CodingKeys.self, forKey: .result)
         try c.encode(input.path, forKey: .input)
         try c.encode(output.path, forKey: .output)
         try c.encode(algo, forKey: .algo)

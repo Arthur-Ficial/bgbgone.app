@@ -15,9 +15,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Show Swift version
         run: swift --version
+
+      - name: Build pinned bgbgone helper (for the real-binary e2e test)
+        run: make -C vendor/bgbgone build
 
       - name: Cache SwiftPM artefacts
         uses: actions/cache@v4
@@ -33,6 +38,10 @@ jobs:
             ${{ runner.os }}-swiftpm-${{ github.repository_id }}-
 
       - name: Run tests
+        # Point the real-binary e2e test at the freshly-built pinned helper so it
+        # actually runs in CI instead of skipping.
+        env:
+          BGBGONE_E2E_BINARY: ${{ github.workspace }}/vendor/bgbgone/.build/release/bgbgone
         run: swift test --parallel --scratch-path build
 
       - name: NoBusinessLogic guard summary
@@ -51,6 +60,8 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Build app bundle
         run: make app
       - name: Capture screenshots

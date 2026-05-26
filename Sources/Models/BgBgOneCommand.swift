@@ -38,7 +38,7 @@ struct BgBgOneCommand: Sendable, Hashable {
             args += ["--bg", "image:\(imageURL.path)", "--bg-fit", "cover"]
         }
 
-        args += ["--to", format.cliValue]
+        args += ["--format", format.cliValue]
         args += ["--json", "--quiet"]
         return args
     }

@@ -75,6 +75,26 @@ struct BinaryLocatorTests {
         #expect(try locator.locate() == bundled)
     }
 
+    @Test func bundledBeatsPathAndHomebrew() throws {
+        // The app's argv is version-coupled to the bgbgone it ships. A stale
+        // user-installed copy on PATH/Homebrew (e.g. an ancient v0.1.x) must NOT
+        // shadow the version-locked binary embedded in the bundle. Only an explicit
+        // settings.json override may win over the bundled binary.
+        let helpers = URL(fileURLWithPath: "/Applications/bgbgone-app.app/Contents/Helpers")
+        let bundled = helpers.appendingPathComponent("bgbgone")
+        let locator = Self.locator(
+            executablePaths: [
+                bundled.path,
+                "/usr/bin/bgbgone",
+                "/opt/homebrew/bin/bgbgone",
+                "/usr/local/bin/bgbgone",
+            ],
+            environment: ["PATH": "/usr/bin:/opt/homebrew/bin"],
+            bundleHelpersDir: helpers
+        )
+        #expect(try locator.locate() == bundled)
+    }
+
     @Test func nothingFoundThrows() throws {
         let locator = Self.locator(
             executablePaths: [],

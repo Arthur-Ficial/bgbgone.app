@@ -15,7 +15,7 @@ struct BgBgOneCommandTests {
         #expect(try cmd.arguments() == [
             "/Users/me/in.jpg",
             "-o", "/Users/me/cutouts/in_bgbgone.png",
-            "--to", "png",
+            "--format", "png",
             "--json", "--quiet",
         ])
     }
@@ -31,7 +31,7 @@ struct BgBgOneCommandTests {
             "/Users/me/in.jpg",
             "-o", "/Users/me/cutouts/in_bgbgone.jpg",
             "--bg", "color:#ffffff",
-            "--to", "jpg",
+            "--format", "jpg",
             "--json", "--quiet",
         ])
     }
@@ -46,7 +46,7 @@ struct BgBgOneCommandTests {
             "/Users/me/in.jpg",
             "-o", "/Users/me/cutouts/in_bgbgone.png",
             "--bg", "color:#06c",
-            "--to", "png",
+            "--format", "png",
             "--json", "--quiet",
         ])
     }
@@ -63,7 +63,7 @@ struct BgBgOneCommandTests {
             "-o", "/Users/me/cutouts/in_bgbgone.png",
             "--bg", "image:/Users/me/bgs/beach.jpg",
             "--bg-fit", "cover",
-            "--to", "png",
+            "--format", "png",
             "--json", "--quiet",
         ])
     }
@@ -75,7 +75,7 @@ struct BgBgOneCommandTests {
                 input: Self.input, output: out,
                 background: .transparent, format: format
             ).arguments()
-            #expect(args.contains("--to"))
+            #expect(args.contains("--format"))
             #expect(args.contains(format.cliValue))
         }
     }

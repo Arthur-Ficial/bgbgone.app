@@ -1,10 +1,11 @@
 #!/bin/zsh
 # build-app.sh — produce build/bgbgone-app.app
 #
-# Strategy: build the Swift binary, copy it into the bundle, embed the
-# bgbgone CLI helper (PATH → /opt/homebrew/bin → /usr/local/bin), sign.
-# Distribution builds set SIGN_IDENTITY + KEYCHAIN_PROFILE; dev builds use
-# ad-hoc ("-") signing.
+# Strategy: build the Swift app binary, copy it into the bundle, embed the
+# bgbgone CLI helper built from the pinned `vendor/bgbgone` submodule, sign.
+# The helper is a declared, version-locked dependency (BGBGONE_VERSION) — NOT
+# whatever happens to be on the dev machine's PATH. Distribution builds set
+# SIGN_IDENTITY + KEYCHAIN_PROFILE; dev builds use ad-hoc ("-") signing.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -15,19 +16,30 @@ ICON_SOURCE="$ROOT_DIR/Resources/AppIcon.icns"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 ENTITLEMENTS="${ENTITLEMENTS:-$ROOT_DIR/bgbgone-app.entitlements}"
 
-# Locate the bgbgone helper that build-time should embed.
-# Mirrors the runtime BinaryLocator's search order minus the bundled fallback.
+# The bgbgone CLI version this app build is pinned to and tested against. Must
+# match vendor/bgbgone/.version (the submodule is pinned to the v$BGBGONE_VERSION
+# tag commit). The embedded binary's --version is asserted against this below.
+BGBGONE_VERSION="1.2.23"
+SUBMODULE_DIR="$ROOT_DIR/vendor/bgbgone"
+
+# Build (or locate) the version-locked bgbgone helper to embed.
+#   1. BGBGONE_HELPER_PATH override — a prebuilt binary (CI cache / cross-build).
+#   2. Otherwise build the pinned vendor/bgbgone submodule from source.
+# No PATH/Homebrew scavenging: a stale system bgbgone must never end up bundled.
 resolve_helper() {
     if [[ -n "${BGBGONE_HELPER_PATH:-}" && -x "${BGBGONE_HELPER_PATH}" ]]; then
         print -- "${BGBGONE_HELPER_PATH}"; return 0
     fi
-    if command -v bgbgone >/dev/null 2>&1; then
-        command -v bgbgone; return 0
+    # Ensure the submodule is checked out (clean clones / CI without --recursive).
+    if [[ ! -f "$SUBMODULE_DIR/.version" ]]; then
+        print "==> Initialising vendor/bgbgone submodule" >&2
+        git -C "$ROOT_DIR" submodule update --init vendor/bgbgone >&2
     fi
-    for p in /opt/homebrew/bin/bgbgone /usr/local/bin/bgbgone; do
-        [[ -x "$p" ]] && { print -- "$p"; return 0 }
-    done
-    return 1
+    print "==> Building pinned bgbgone v${BGBGONE_VERSION} from vendor/bgbgone" >&2
+    make -C "$SUBMODULE_DIR" build >&2
+    local built="$SUBMODULE_DIR/.build/release/bgbgone"
+    [[ -x "$built" ]] || { print "error: submodule build did not produce $built" >&2; return 1; }
+    print -- "$built"
 }
 
 codesign_path() {
@@ -80,14 +92,22 @@ if [[ -d "$DEMO_SRC" ]]; then
     cp "$DEMO_SRC"/*.jpg "$DEMO_DEST/" 2>/dev/null || true
 fi
 
-if HELPER_PATH="$(resolve_helper 2>/dev/null)"; then
-    print "==> Embedding bgbgone helper from ${HELPER_PATH}"
-    cp "$HELPER_PATH" "$APP_BUNDLE/Contents/Helpers/bgbgone"
-    chmod +x "$APP_BUNDLE/Contents/Helpers/bgbgone"
-else
-    print "==> Warning: bgbgone not found — app will only work if user has bgbgone on PATH"
-    rmdir "$APP_BUNDLE/Contents/Helpers" 2>/dev/null || true
+HELPER_PATH="$(resolve_helper)" || {
+    print "error: could not build/locate the bgbgone helper — refusing to ship an app without its version-locked CLI dependency" >&2
+    exit 1
+}
+print "==> Embedding bgbgone helper from ${HELPER_PATH}"
+cp "$HELPER_PATH" "$APP_BUNDLE/Contents/Helpers/bgbgone"
+chmod +x "$APP_BUNDLE/Contents/Helpers/bgbgone"
+
+# Assert the embedded binary is exactly the pinned version. Turns the old silent
+# "bundled a stale binary" failure mode into a hard build error.
+EMBEDDED_VERSION="$("$APP_BUNDLE/Contents/Helpers/bgbgone" --version 2>/dev/null || true)"
+if [[ "$EMBEDDED_VERSION" != *"v${BGBGONE_VERSION}"* ]]; then
+    print "error: embedded bgbgone reports '${EMBEDDED_VERSION}', expected v${BGBGONE_VERSION}" >&2
+    exit 1
 fi
+print "==> Verified embedded bgbgone: ${EMBEDDED_VERSION}"
 
 print "==> Signing bundle (${SIGN_IDENTITY})"
 sign_bundle

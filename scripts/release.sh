@@ -71,8 +71,17 @@ PLIST_VERSION="$(defaults read "$EXTRACTED_APP/Contents/Info.plist" CFBundleShor
 
 if [[ -x "$EXTRACTED_APP/Contents/Helpers/bgbgone" ]]; then
     verify_pass "bgbgone helper embedded"
+    # Assert the embedded helper is exactly the pinned submodule version — the app
+    # is bundled-only, so the packaged binary IS the one users run.
+    PINNED_BGBGONE="$(tr -d '\n' < "$ROOT_DIR/vendor/bgbgone/.version" 2>/dev/null)"
+    EMBEDDED_BGBGONE="$("$EXTRACTED_APP/Contents/Helpers/bgbgone" --version 2>/dev/null || true)"
+    if [[ -n "$PINNED_BGBGONE" && "$EMBEDDED_BGBGONE" == *"v${PINNED_BGBGONE}"* ]]; then
+        verify_pass "embedded bgbgone = v$PINNED_BGBGONE (matches pinned submodule)"
+    else
+        verify_fail "embedded bgbgone = '$EMBEDDED_BGBGONE', expected v$PINNED_BGBGONE (pinned submodule)"
+    fi
 else
-    verify_fail "bgbgone helper NOT embedded — fresh-Mac install will fall back to PATH only"
+    verify_fail "bgbgone helper NOT embedded — bundled-only app cannot run without it"
 fi
 
 if [[ "$SIGN_IDENTITY" != "-" ]]; then

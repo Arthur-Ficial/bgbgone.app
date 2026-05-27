@@ -9,7 +9,8 @@ struct BgBgOneRunner: BgBgOneRunning {
     let binary: URL
     let timeout: Duration
     /// Optional env to *add* on top of the inherited parent environment. Used by tests
-    /// to drive `bgbgone-mock.sh` deterministically without setenv races.
+    /// to drive the process-behavior harness (exit code / stderr / delay) deterministically
+    /// without setenv races.
     let extraEnvironment: [String: String]
     private let logger: Logger
 

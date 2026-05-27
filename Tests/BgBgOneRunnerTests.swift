@@ -2,29 +2,23 @@ import Foundation
 import Testing
 @testable import bgbgone_app
 
-@Suite("BgBgOneRunner against mock CLI")
+/// Exercises `BgBgOneRunner`'s PROCESS handling — exit-code → `RunnerError` mapping,
+/// stderr-tail capture, garbage-stdout handling, missing-binary, and cancellation —
+/// against a generic `exit-harness.sh` that drives exit code / stderr / delay and
+/// CANNOT emit a success envelope. The success wire-contract (argv + `{ok,schema,result}`
+/// JSON) is proven separately and only against the real binary in `RealBinaryE2ETests`,
+/// so nothing here can give false confidence about it.
+@Suite("BgBgOneRunner process & error handling")
 struct BgBgOneRunnerTests {
-    /// Path to the test fixture shell that mimics the bgbgone CLI's exit codes / stdout.
-    static var mockBinary: URL {
+    /// Path to the generic subprocess-behaviour harness (NOT a bgbgone stand-in).
+    static var harness: URL {
         var url = URL(fileURLWithPath: #filePath)
         url.deleteLastPathComponent() // …/Tests
-        return url.appendingPathComponent("fixtures").appendingPathComponent("bgbgone-mock.sh")
+        return url.appendingPathComponent("fixtures").appendingPathComponent("exit-harness.sh")
     }
 
     private static func runner(_ env: [String: String] = [:]) -> BgBgOneRunner {
-        BgBgOneRunner(binary: mockBinary, extraEnvironment: env)
-    }
-
-    @Test func happyPathParsesJSON() async throws {
-        let result = try await Self.runner().run(
-            arguments: ["/tmp/in.jpg", "-o", "/tmp/out.png", "--json", "--quiet"]
-        )
-        #expect(result.input == URL(fileURLWithPath: "/tmp/in.jpg"))
-        #expect(result.output == URL(fileURLWithPath: "/tmp/out.png"))
-        #expect(result.algo == "vn-mask")
-        #expect(result.format == "png")
-        #expect(result.width == 1024)
-        #expect(result.height == 768)
+        BgBgOneRunner(binary: harness, extraEnvironment: env)
     }
 
     @Test func exitCodeTwoIsNoSubject() async {
@@ -58,8 +52,10 @@ struct BgBgOneRunnerTests {
         }
     }
 
-    @Test func malformedJSONIsFrameworkError() async {
+    @Test func garbageStdoutOnSuccessIsMalformedJSON() async {
         do {
+            // Exit 0 but non-JSON stdout → the runner must surface malformedJSON,
+            // never silently "succeed".
             _ = try await Self.runner(["MOCK_STDOUT": "not json at all"])
                 .run(arguments: ["/tmp/in.jpg"])
             Issue.record("expected throw")

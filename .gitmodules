@@ -1,0 +1,7 @@
+[submodule "vendor/bgbgone"]
+	path = vendor/bgbgone
+	url = git@github.com:Arthur-Ficial/bgbgone.git
+	# Build-time vendored dependency, pinned to a release tag. `make build`
+	# regenerates BuildInfo.swift and rewrites .build/, dirtying the working
+	# tree. We pin only the commit, so ignore working-tree dirt in `git status`.
+	ignore = dirty

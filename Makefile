@@ -3,13 +3,23 @@ APP_BUNDLE  = build/$(APP_NAME).app
 APP_DIR    ?= /Applications
 BIN_DIR    ?= $(HOME)/.local/bin
 SCRATCH    = --scratch-path build
+VENDOR_BIN  = vendor/bgbgone/.build/release/bgbgone
 
-.PHONY: build test app run dist install install-app install-cli release clean screenshots
+.PHONY: build test app run dist install install-app install-cli release clean screenshots vendor
 
 build:
 	swift build -c release $(SCRATCH)
 
-test:
+# Build the pinned, version-locked bgbgone CLI from the submodule. Idempotent:
+# only (re)builds when the release binary is missing. The real-binary e2e
+# (RealBinaryE2ETests) runs against this; without it the e2e SKIPS.
+vendor: $(VENDOR_BIN)
+
+$(VENDOR_BIN):
+	git submodule update --init --recursive
+	$(MAKE) -C vendor/bgbgone build
+
+test: vendor
 	swift test $(SCRATCH)
 
 app:

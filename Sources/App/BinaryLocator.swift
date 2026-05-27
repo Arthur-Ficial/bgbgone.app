@@ -1,17 +1,21 @@
 import Foundation
 import os
 
-/// Locates the `bgbgone` CLI binary at runtime.
+/// Locates the `bgbgone` CLI binary at runtime — **bundled-only, no fallback**.
 ///
-/// Resolution order (user-chosen, see the project's CLAUDE.md):
+/// Resolution order (see the project's CLAUDE.md):
 ///   1. `~/Library/Application Support/bgbgone-app/settings.json` override path
-///   2. `PATH` lookup via `/usr/bin/env`
-///   3. `/opt/homebrew/bin/bgbgone`
-///   4. `/usr/local/bin/bgbgone`
-///   5. `Bundle.main` → `Contents/Helpers/bgbgone` (embedded fallback)
+///      (opt-in; the documented dev/test escape hatch — defaults to absent).
+///   2. `Bundle.main` → `Contents/Helpers/bgbgone` — the version-locked binary the
+///      app shipped and was tested against.
 ///
-/// First hit that is `isExecutableFile` wins. Logs the resolved path via `OSLog` so
-/// agents can see which copy is actually running.
+/// There is **deliberately no PATH / Homebrew / `/usr/local` scavenging**: a stale
+/// user-installed `bgbgone` (e.g. an ancient v0.1.x) must never shadow the pinned,
+/// bundled binary and break the version-coupled argv/JSON contract. If neither the
+/// override nor the bundled helper resolves, the app shows `MissingBinaryView` and
+/// disables actions — it does not fall back to "whatever's on the machine".
+///
+/// Logs the resolved path via `OSLog` so agents can see which copy is actually running.
 struct BinaryLocator: Sendable {
     enum LocatorError: Error, Equatable, Sendable {
         case notFound(searched: [String])
@@ -22,19 +26,13 @@ struct BinaryLocator: Sendable {
     /// Production wires this to `FileManager.default.isExecutableFile(atPath:)`;
     /// tests inject a set-membership lookup for deterministic behaviour.
     let isExecutable: @Sendable (String) -> Bool
-    let environment: [String: String]
-    let homebrewBin: URL
-    let usrLocalBin: URL
     let bundleHelpersDir: URL?
     let overridePath: URL?
 
-    /// Production initialiser — reads env + main bundle + on-disk override.
+    /// Production initialiser — reads the main bundle + on-disk override.
     init() {
         self.init(
             isExecutable: { FileManager.default.isExecutableFile(atPath: $0) },
-            environment: ProcessInfo.processInfo.environment,
-            homebrewBin: URL(fileURLWithPath: "/opt/homebrew/bin/bgbgone"),
-            usrLocalBin: URL(fileURLWithPath: "/usr/local/bin/bgbgone"),
             bundleHelpersDir: Bundle.main.executableURL?
                 .deletingLastPathComponent() // …/Contents/MacOS
                 .deletingLastPathComponent() // …/Contents
@@ -47,16 +45,10 @@ struct BinaryLocator: Sendable {
     /// without depending on the machine's actual filesystem.
     init(
         isExecutable: @escaping @Sendable (String) -> Bool,
-        environment: [String: String],
-        homebrewBin: URL,
-        usrLocalBin: URL,
         bundleHelpersDir: URL?,
         overridePath: URL?
     ) {
         self.isExecutable = isExecutable
-        self.environment = environment
-        self.homebrewBin = homebrewBin
-        self.usrLocalBin = usrLocalBin
         self.bundleHelpersDir = bundleHelpersDir
         self.overridePath = overridePath
     }
@@ -65,7 +57,7 @@ struct BinaryLocator: Sendable {
         let logger = Logger(subsystem: BuildInfo.osLogSubsystem, category: "binary")
         var searched: [String] = []
 
-        // 1. Explicit override
+        // 1. Explicit override (opt-in dev/test escape hatch).
         if let override = overridePath {
             guard isExecutable(override.path) else {
                 throw LocatorError.overrideNotExecutable(override)
@@ -74,30 +66,7 @@ struct BinaryLocator: Sendable {
             return override
         }
 
-        // 2. PATH (only entries the env actually advertises)
-        let pathDirs = (environment["PATH"] ?? "")
-            .split(separator: ":")
-            .map(String.init)
-        for dir in pathDirs {
-            let candidate = URL(fileURLWithPath: dir).appendingPathComponent("bgbgone")
-            searched.append(candidate.path)
-            if isExecutable(candidate.path) {
-                logger.info("resolved (PATH): \(candidate.path, privacy: .public)")
-                return candidate
-            }
-        }
-
-        // 3 + 4. Well-known Homebrew / /usr/local prefixes (in case PATH isn't inherited
-        // under launchd or the user installed via `make install` outside their shell PATH).
-        for candidate in [homebrewBin, usrLocalBin] {
-            searched.append(candidate.path)
-            if isExecutable(candidate.path) {
-                logger.info("resolved (well-known): \(candidate.path, privacy: .public)")
-                return candidate
-            }
-        }
-
-        // 5. Bundle-embedded fallback.
+        // 2. Bundled, version-locked helper — the only production path.
         if let helpersDir = bundleHelpersDir {
             let bundled = helpersDir.appendingPathComponent("bgbgone")
             searched.append(bundled.path)

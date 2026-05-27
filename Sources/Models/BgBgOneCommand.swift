@@ -60,9 +60,9 @@ struct BgBgOneCommand: Sendable, Hashable {
             args += ["--bg", "image:\(imageURL.path)", "--bg-fit", "cover"]
         }
 
-        args += ["--to", format.cliValue]
+        args += ["--format", format.cliValue]
         if algorithm != .auto {
-            args += ["--algo", algorithm.cliValue]
+            args += ["--type", algorithm.cliValue]
         }
         if let filterChain, !filterChain.isEmpty {
             args += ["--filter", filterChain]

@@ -7,11 +7,11 @@ enum BackgroundChoice: Sendable, Hashable, Codable {
     case image(URL)
 }
 
-/// Output format — maps to bgbgone's `--to` flag.
+/// Output format — maps to bgbgone's `--format` flag.
 enum OutputFormat: String, Sendable, Hashable, CaseIterable, Codable {
     case png, jpg, heic, tiff
 
-    /// CLI argument value (`--to png`, etc.).
+    /// CLI argument value (`--format png`, etc.).
     var cliValue: String { rawValue }
 
     /// File extension to append to the resolved output path.
@@ -28,8 +28,9 @@ enum OutputFormat: String, Sendable, Hashable, CaseIterable, Codable {
     }
 }
 
-/// Segmentation algorithm — maps to bgbgone's `--algo` flag. Values match the
-/// CLI verbatim (see `bgbgone --help`: auto | vn-mask | person | saliency).
+/// Segmentation algorithm — maps to bgbgone's `--type` flag. Values are a subset of
+/// the CLI's subject-type vocabulary (see `bgbgone --help`: auto | person | product |
+/// car | animal | graphic | transportation | saliency | vn-mask).
 enum Algorithm: String, Sendable, Hashable, CaseIterable, Codable {
     case auto      = "auto"
     case vnMask    = "vn-mask"

@@ -15,7 +15,7 @@ struct BgBgOneCommandTests {
         #expect(try cmd.arguments() == [
             "/Users/me/in.jpg",
             "-o", "/Users/me/cutouts/in_bgbgone.png",
-            "--to", "png",
+            "--format", "png",
             "--json", "--quiet",
         ])
     }
@@ -31,7 +31,7 @@ struct BgBgOneCommandTests {
             "/Users/me/in.jpg",
             "-o", "/Users/me/cutouts/in_bgbgone.jpg",
             "--bg", "color:#ffffff",
-            "--to", "jpg",
+            "--format", "jpg",
             "--json", "--quiet",
         ])
     }
@@ -46,7 +46,7 @@ struct BgBgOneCommandTests {
             "/Users/me/in.jpg",
             "-o", "/Users/me/cutouts/in_bgbgone.png",
             "--bg", "color:#06c",
-            "--to", "png",
+            "--format", "png",
             "--json", "--quiet",
         ])
     }
@@ -63,7 +63,7 @@ struct BgBgOneCommandTests {
             "-o", "/Users/me/cutouts/in_bgbgone.png",
             "--bg", "image:/Users/me/bgs/beach.jpg",
             "--bg-fit", "cover",
-            "--to", "png",
+            "--format", "png",
             "--json", "--quiet",
         ])
     }
@@ -75,7 +75,7 @@ struct BgBgOneCommandTests {
                 input: Self.input, output: out,
                 background: .transparent, format: format
             ).arguments()
-            #expect(args.contains("--to"))
+            #expect(args.contains("--format"))
             #expect(args.contains(format.cliValue))
         }
     }
@@ -172,7 +172,7 @@ struct BgBgOneCommandTests {
             background: .transparent, format: .png, algorithm: .auto
         )
         let args = try cmd.arguments()
-        #expect(args.contains("--algo") == false)
+        #expect(args.contains("--type") == false)
     }
 
     @Test func algoVnMaskEmitsFlag() throws {
@@ -181,7 +181,7 @@ struct BgBgOneCommandTests {
             background: .transparent, format: .png, algorithm: .vnMask
         )
         let args = try cmd.arguments()
-        let idx = args.firstIndex(of: "--algo")
+        let idx = args.firstIndex(of: "--type")
         #expect(idx != nil)
         if let idx { #expect(args[args.index(after: idx)] == "vn-mask") }
     }
@@ -192,7 +192,7 @@ struct BgBgOneCommandTests {
             background: .transparent, format: .png, algorithm: .person
         )
         let args = try cmd.arguments()
-        let idx = args.firstIndex(of: "--algo")
+        let idx = args.firstIndex(of: "--type")
         #expect(idx != nil)
         if let idx { #expect(args[args.index(after: idx)] == "person") }
     }
@@ -203,7 +203,7 @@ struct BgBgOneCommandTests {
             background: .transparent, format: .png, algorithm: .saliency
         )
         let args = try cmd.arguments()
-        let idx = args.firstIndex(of: "--algo")
+        let idx = args.firstIndex(of: "--type")
         #expect(idx != nil)
         if let idx { #expect(args[args.index(after: idx)] == "saliency") }
     }

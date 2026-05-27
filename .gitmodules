@@ -1,0 +1,3 @@
+[submodule "vendor/bgbgone"]
+	path = vendor/bgbgone
+	url = git@github.com:Arthur-Ficial/bgbgone.git

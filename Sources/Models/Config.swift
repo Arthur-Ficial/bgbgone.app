@@ -112,7 +112,9 @@ struct Config: Sendable, Hashable {
         if let v = maskExpand    { recipes.append(.init(layer: .mask, name: "expand",    args: [.positional(String(v))])) }
         if let v = maskContract  { recipes.append(.init(layer: .mask, name: "contract",  args: [.positional(String(v))])) }
         if let v = fgScale       { recipes.append(.init(layer: .fg,   name: "scale",     args: [.positional(String(format: "%.2f", v))])) }
-        if let dx = fgTranslateX, let dy = fgTranslateY { recipes.append(.init(layer: .fg, name: "translate", args: [.positional(String(dx)), .positional(String(dy))])) }
+        // bgbgone's `translate` takes a single `X,Y` value (comma-separated), NOT two
+        // colon-joined positionals — `translate=10:20` is rejected ("value must be X,Y").
+        if let dx = fgTranslateX, let dy = fgTranslateY { recipes.append(.init(layer: .fg, name: "translate", args: [.positional("\(dx),\(dy)")])) }
         if let v = fgRotate      { recipes.append(.init(layer: .fg,   name: "rotate",    args: [.positional(String(format: "%.1f", v))])) }
         if let v = fgFlip        { recipes.append(.init(layer: .fg,   name: "flip",      args: [.positional(v)])) }
         if let c = fgOutlineColor, let w = fgOutlineWidth {

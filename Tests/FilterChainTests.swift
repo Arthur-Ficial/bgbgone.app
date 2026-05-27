@@ -30,11 +30,14 @@ struct FilterChainTests {
         #expect(chain.dslString == "mask:feather=8")
     }
 
-    @Test func multiplePositionalArgs() {
+    @Test func multiplePositionalArgsJoinWithColon() {
+        // Genuinely colon-separated positionals, e.g. bgbgone's `bloom=intensity:radius`
+        // (catalogue example `bloom=0.5:10`). NOTE: `translate` is NOT this shape — it
+        // takes a single `X,Y` comma value, so Config composes it as one positional.
         let chain = FilterChain(recipes: [
-            FilterRecipe(layer: .fg, name: "translate", args: [.positional("12"), .positional("-6")])
+            FilterRecipe(name: "bloom", args: [.positional("0.5"), .positional("10")])
         ])
-        #expect(chain.dslString == "fg:translate=12:-6")
+        #expect(chain.dslString == "bloom=0.5:10")
     }
 
     @Test func keyedArgsUseKeyEqualsValue() {

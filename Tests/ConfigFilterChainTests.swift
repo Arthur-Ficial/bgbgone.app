@@ -16,6 +16,16 @@ struct ConfigFilterChainTests {
         #expect(cfg.filterChain.dslString == "mask:feather=8")
     }
 
+    @Test func translateComposesAsSingleCommaValue() {
+        // Regression: bgbgone's `translate` takes one `X,Y` value. Composing it as two
+        // colon-joined positionals (`translate=10:20`) is rejected by the CLI
+        // ("value must be X,Y"). Must be a single comma value.
+        var cfg = Config(outDirectory: URL(fileURLWithPath: "/out"))
+        cfg.fgTranslateX = 10
+        cfg.fgTranslateY = 20
+        #expect(cfg.filterChain.dslString == "fg:translate=10,20")
+    }
+
     @Test func multipleFieldsComposeIntoChain() {
         var cfg = Config(outDirectory: URL(fileURLWithPath: "/out"))
         cfg.maskFeather = 8

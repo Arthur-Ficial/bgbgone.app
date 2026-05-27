@@ -15,6 +15,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The pinned bgbgone CLI lives in the vendor/bgbgone submodule; the
+          # real-binary e2e (RealBinaryE2ETests) needs it built or it SKIPS.
+          submodules: recursive
 
       - name: Show Swift version
         run: swift --version
@@ -31,6 +35,17 @@ jobs:
           key: ${{ runner.os }}-swiftpm-${{ github.repository_id }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
           restore-keys: |
             ${{ runner.os }}-swiftpm-${{ github.repository_id }}-
+
+      - name: Cache pinned bgbgone helper build
+        uses: actions/cache@v4
+        with:
+          path: vendor/bgbgone/.build
+          # Invalidates when the pinned version (BGBGONE_VERSION in build-app.sh)
+          # or the submodule wiring changes.
+          key: ${{ runner.os }}-bgbgone-helper-${{ hashFiles('scripts/build-app.sh', '.gitmodules') }}
+
+      - name: Build pinned bgbgone helper (for the real-binary e2e)
+        run: make vendor
 
       - name: Run tests
         run: swift test --parallel --scratch-path build
@@ -51,6 +66,10 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@v4
+        with:
+          # make app builds + embeds the pinned helper from this submodule and
+          # asserts its --version, so the submodule must be present.
+          submodules: recursive
       - name: Build app bundle
         run: make app
       - name: Capture screenshots

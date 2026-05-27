@@ -32,8 +32,8 @@ This rule is non-negotiable. It is the simplest expression of the "no fake UI" c
 This is the hardest rule in the repo. **Every pixel-level operation belongs to the spawned `bgbgone` CLI binary.** The Swift code here is allowed to:
 
 - Read **only** image metadata via `ImageIO` (`width × height × bytes` for the file list).
-- Resolve `bgbgone` binary path via `BinaryLocator` (PATH first, embedded fallback).
-- Compose `[String]` argv from `Config + ImageFile` via `BgBgOneCommand`.
+- Resolve `bgbgone` binary path via `BinaryLocator` (**bundled-only**: the version-locked binary embedded from the pinned `vendor/bgbgone` submodule, plus an opt-in `settings.json` override as the dev/test escape hatch — **no PATH/Homebrew/`/usr/local` scavenging**, so a stale system bgbgone can never shadow the tested one).
+- Compose `[String]` argv from `Config + ImageFile` via `BgBgOneCommand` (`--format`/`--type`, never the dropped `--to`/`--algo`).
 - Spawn `Process`, read stdout JSON, read exit code, surface to ViewModel.
 - Walk folders with `FileManager` / `NSDirectoryEnumerator`.
 - Render SwiftUI views from state.
@@ -42,7 +42,7 @@ It is **not** allowed to:
 
 - `import Vision`, `import CoreImage`, `import CoreML`, `import Metal`, `import Accelerate`, or any other framework that could do image segmentation, matting, or compositing in-process. **A test (`NoVisionImportTest`) scans `Sources/` and fails if any of these appear.**
 - Re-implement matting, alpha blending, format conversion, or background compositing.
-- Fall back to a "simpler algorithm" if `bgbgone` is missing. If the binary cannot be found (which should be impossible thanks to the embedded fallback), the app shows `MissingBinaryView` and disables actions.
+- Fall back to a "simpler algorithm" if `bgbgone` is missing. If the binary cannot be found (which should be impossible thanks to the bundled, version-asserted helper), the app shows `MissingBinaryView` and disables actions — it never silently runs some other `bgbgone` off the machine.
 - Parse `bgbgone`'s human-readable stderr text. Use `--json` / `--ndjson` only.
 
 If a feature needs new image-processing capability, **add it to `bgbgone` first**, then surface the new flag in the GUI's `Config + BgBgOneCommand`. Never the other way around.
@@ -153,6 +153,26 @@ make release            # full release pipeline (Arthur only)
 
 `.version` is the single source of truth for the version number. Build scripts inject it into `Info.plist` via PlistBuddy at bundle time. Same pattern as `bgbgone` and `apfel-chat`.
 
+### The `bgbgone` CLI is a pinned, bundled dependency
+
+`bgbgone` is vendored as a git submodule at `vendor/bgbgone`, pinned to a release tag
+commit (currently **v1.2.23** — see `BGBGONE_VERSION` in `scripts/build-app.sh`). It
+stays its own standalone repo; we depend on its **binary**, never link its code (that
+would break the no-business-logic rule). `make app` builds the submodule
+(`make -C vendor/bgbgone build` → `.build/release/bgbgone`), embeds it at
+`Contents/Helpers/bgbgone`, and **asserts the embedded `--version` equals
+`BGBGONE_VERSION`** — a stale system bgbgone can never end up bundled. `release.sh`
+re-verifies this against `vendor/bgbgone/.version` on the packaged app.
+
+The GUI's argv + JSON contract is version-coupled to this CLI, so resolution is
+**bundled-only** (`BinaryLocator`): the embedded binary, plus an opt-in `settings.json`
+override (the dev escape hatch — point it at `vendor/bgbgone/.build/release/bgbgone`
+when running via `swift run`, which has no `Contents/Helpers`). No PATH scavenging.
+When bumping the pin: move the submodule to the new tag, update `BGBGONE_VERSION`, and
+confirm `RealBinaryE2ETests` + the `BgBgOneCommand` argv contract still hold (the CLI's
+`--format`/`--type` flags and `{ok,schema,result}` JSON envelope are what the app
+expects). After a fresh clone: `git submodule update --init --recursive` (or `make vendor`).
+
 ## Design reference (this is the spec)
 
 `design/project/bgbgone.html` (open in a browser) is **the spec** for layout, color, copy, and interaction. The Tweaks panel cycles through every drop phase. Any Swift screen must match its HTML counterpart pixel-for-pixel — drift > 3% is a release blocker.
@@ -164,11 +184,14 @@ make release            # full release pipeline (Arthur only)
 | Area | Files |
 |------|-------|
 | Entry point | `Sources/App/BgBgOneApp.swift` |
-| Binary discovery | `Sources/App/BinaryLocator.swift` |
-| CLI argv composer | `Sources/Models/BgBgOneCommand.swift` |
+| Binary discovery | `Sources/App/BinaryLocator.swift` (bundled-only) |
+| CLI argv composer | `Sources/Models/BgBgOneCommand.swift` (`--format`/`--type`) |
+| CLI JSON result | `Sources/Models/RunResult.swift` (`{ok,schema,result}` envelope) |
 | Process spawn | `Sources/Services/BgBgOneRunner.swift` |
 | Drop FSM | `Sources/ViewModels/DropMachine.swift` |
 | Queue executor | `Sources/ViewModels/QueueRunner.swift` |
+| Bundled CLI dependency | `vendor/bgbgone` (submodule), embedded by `scripts/build-app.sh` |
+| Real-binary e2e | `Tests/RealBinaryE2ETests.swift` |
 | Design spec | `design/project/bgbgone.html` |
 | Version | `.version` |
 | Bundle metadata | `Info.plist` |

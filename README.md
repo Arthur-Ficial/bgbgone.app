@@ -68,12 +68,19 @@ SwiftUI 6.3 / macOS 26 single-window app. It carries no media libraries beyond `
 See [CLAUDE.md](CLAUDE.md) for project rules. TL;DR:
 
 ```bash
-make test           # swift test (66 tests as of v0.2)
-make app            # builds build/bgbgone-app.app (ad-hoc signed)
+git submodule update --init --recursive   # fetch the pinned bgbgone CLI (vendor/bgbgone)
+make vendor         # build the pinned bgbgone v1.2.23 helper (also done by make app/test)
+make test           # swift test — incl. the real-binary e2e against the pinned CLI
+make app            # builds build/bgbgone-app.app (embeds + version-asserts the helper)
 make run            # build + open
 make screenshots    # capture build/screenshots/<state>.png for every UI state
 make release        # bump .version, sign, notarize, release, update tap (Arthur only)
 ```
+
+The `bgbgone` CLI is a **pinned git submodule** (`vendor/bgbgone` @ v1.2.23), built and
+embedded into the app bundle — never scavenged from your `PATH`. After cloning, run the
+`git submodule update --init --recursive` line above (or just `make vendor` / `make app`,
+which initialise it for you).
 
 The design source-of-truth lives in [`design/`](design/) — open `design/project/bgbgone.html` in a browser to step through every UI state. The Swift implementation matches those mockups via real macOS chrome (no painted facsimiles).
 
